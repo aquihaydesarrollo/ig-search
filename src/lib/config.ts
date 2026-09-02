@@ -12,11 +12,11 @@ export interface RadarConfig {
   limitesDiarios: { comentarios: number; likes: number; seguimientos: number };
   scoring: Record<string, number>;
   umbrales: {
-    resenasMinimas: number;
-    valoracionMinima: number;
     diasIgAbandonado: number;
-    segundosWebLenta: number;
+    engagementBajo: number;
+    seguidoresNegocioActivo: number;
     leadsPorDia: number;
+    maxWebsPorBarrido: number;
   };
 }
 

@@ -1,18 +1,27 @@
-import { query, queryOne } from '@/lib/db';
+import { query, queryOne, baseDatosExiste, rutaBaseDatos } from '@/lib/db';
 import { getConfig } from '@/lib/config';
 import TareaFila, { type Tarea } from '@/components/TareaFila';
+import AvisoConfiguracion from '@/components/AvisoConfiguracion';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Hoy() {
+  if (!baseDatosExiste()) {
+    return (
+      <AvisoConfiguracion
+        mensaje="Falta crear la base de datos"
+        detalle={`No existe el fichero ${rutaBaseDatos()}.\n\nEjecuta en el servidor:\n  npm run db:init\n\nY después el primer barrido:\n  npm run radar`}
+      />
+    );
+  }
+
   const cfg = getConfig();
 
-  const tareas = await query<Tarea>(
+  const filas = await query<any>(
     `SELECT id, tipo, handle, enlace, contexto, hecha
-       FROM tareas_diarias
-      WHERE fecha = CURRENT_DATE
-      ORDER BY hecha ASC, id ASC`,
+       FROM tareas_diarias WHERE fecha = date('now') ORDER BY hecha ASC, id ASC`,
   );
+  const tareas: Tarea[] = filas.map((f) => ({ ...f, hecha: Boolean(f.hecha) }));
 
   const ultima = await queryOne<any>(
     `SELECT iniciada_en, estado, negocios_nuevos, webs_auditadas, tareas_generadas, error
@@ -23,7 +32,7 @@ export default async function Hoy() {
     `SELECT
        (SELECT count(*) FROM negocios) AS negocios,
        (SELECT count(*) FROM leads WHERE estado = 'nuevo' AND score >= 40) AS leads_calientes,
-       (SELECT count(*) FROM tareas_diarias WHERE fecha = CURRENT_DATE AND hecha) AS hechas_hoy`,
+       (SELECT count(*) FROM tareas_diarias WHERE fecha = date('now') AND hecha = 1) AS hechas_hoy`,
   );
 
   const pendientes = tareas.filter((t) => !t.hecha).length;
@@ -37,34 +46,25 @@ export default async function Hoy() {
             {pendientes > 0
               ? `${pendientes} acciones pendientes · unos ${Math.max(Math.round(pendientes * 1.2), 5)} minutos`
               : tareas.length > 0
-                ? 'Todo hecho por hoy. Buen trabajo.'
+                ? 'Todo hecho por hoy.'
                 : 'Todavía no hay lista. Ejecuta el radar para generarla.'}
           </p>
         </div>
         <div className="flex gap-3 text-sm">
-          <Dato valor={stats?.negocios ?? 0} etiqueta="negocios en base" />
+          <Dato valor={stats?.negocios ?? 0} etiqueta="negocios" />
           <Dato valor={stats?.leads_calientes ?? 0} etiqueta="leads calientes" />
           <Dato valor={stats?.hechas_hoy ?? 0} etiqueta="hechas hoy" />
         </div>
       </div>
 
-      {cfg.ciudad === 'PENDIENTE' && (
-        <div className="tarjeta border-warn/50 bg-warn/10">
-          <p className="text-sm">
-            <strong>Falta configurar la ciudad.</strong> Edita <code>config/radar.json</code> y
-            pon tu ciudad, los sectores prioritarios y los perfiles de la competencia.
-          </p>
-        </div>
+      {(stats?.negocios ?? 0) === 0 && (
+        <AvisoConfiguracion
+          mensaje="La base de datos está vacía"
+          detalle={`Ejecuta el primer barrido con:\n  npm run radar\n\nBuscará negocios de ${cfg.ciudad} en OpenStreetMap y auditará sus webs. Tarda varios minutos.`}
+        />
       )}
 
-      {tareas.length === 0 ? (
-        <div className="tarjeta text-center py-10">
-          <p className="text-muted">
-            Sin tareas para hoy. El radar se ejecuta cada noche; también puedes lanzarlo a mano con{' '}
-            <code className="text-white">npm run radar</code>.
-          </p>
-        </div>
-      ) : (
+      {tareas.length > 0 && (
         <div className="space-y-2">
           {tareas.map((t) => <TareaFila key={t.id} tarea={t} />)}
         </div>
@@ -81,8 +81,8 @@ export default async function Hoy() {
 
       {ultima && (
         <p className="text-xs text-muted">
-          Último barrido: {new Date(ultima.iniciada_en).toLocaleString('es-ES')} · estado {ultima.estado}
-          {' '}· {ultima.negocios_nuevos} negocios nuevos · {ultima.webs_auditadas} webs auditadas
+          Último barrido: {ultima.iniciada_en} · estado {ultima.estado} ·{' '}
+          {ultima.negocios_nuevos} negocios nuevos · {ultima.webs_auditadas} webs auditadas
           {ultima.error && <span className="text-warn"> · avisos: {ultima.error}</span>}
         </p>
       )}

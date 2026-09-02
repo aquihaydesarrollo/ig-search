@@ -1,13 +1,18 @@
-import { query } from '@/lib/db';
+import { query, baseDatosExiste } from '@/lib/db';
+import AvisoConfiguracion from '@/components/AvisoConfiguracion';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Competencia() {
+  if (!baseDatosExiste()) {
+    return <AvisoConfiguracion mensaje="Falta crear la base de datos" detalle="Ejecuta: npm run db:init" />;
+  }
+
   const perfiles = await query<any>(
     `SELECT handle, seguidores, num_publicaciones, biografia, ultima_publicacion,
             engagement_medio, frecuencia_semanal, revisado_en
        FROM perfiles_ig
-      WHERE es_competidor = true
+      WHERE es_competidor = 1
       ORDER BY seguidores DESC NULLS LAST`,
   );
 
@@ -15,8 +20,8 @@ export default async function Competencia() {
     `SELECT p.handle, p.texto, p.permalink, p.likes, p.comentarios, p.publicada_en, p.tipo
        FROM publicaciones p
        JOIN perfiles_ig pf ON pf.handle = p.handle
-      WHERE pf.es_competidor = true
-        AND p.publicada_en > now() - interval '30 days'
+      WHERE pf.es_competidor = 1
+        AND p.publicada_en > datetime('now','-30 days')
       ORDER BY (COALESCE(p.likes,0) + COALESCE(p.comentarios,0) * 3) DESC
       LIMIT 15`,
   );

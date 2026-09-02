@@ -2,14 +2,14 @@ import type { RadarConfig } from './config.ts';
 
 export interface EntradaScoring {
   sector: string | null;
-  valoracion: number | null;
-  numResenas: number | null;
   tieneWeb: boolean;
   accesible: boolean | null;
-  https: boolean | null;
-  responsive: boolean | null;
-  segundosCarga: number | null;
-  puntuacionPsi: number | null;
+  problemas: string[];
+  plantillaBarata: boolean | null;
+  anioCopyright: number | null;
+  telefono: string | null;
+  tieneHorario: boolean;
+  esCadena: boolean;
   igSeguidores: number | null;
   igUltimaPublicacion: string | null;
   igEngagement: number | null;
@@ -22,7 +22,10 @@ export interface ResultadoScoring {
 
 /**
  * Puntua la oportunidad comercial de un negocio.
- * Cuanto mas alto, mas facil es venderle diseno web / redes sociales.
+ * Cuanto mas alto, mas facil es venderle diseno web o gestion de redes.
+ *
+ * Sin las resenas de Google, la senal de "negocio que funciona" sale del
+ * telefono, el horario publicado y sobre todo de sus seguidores en Instagram.
  */
 export function puntuar(e: EntradaScoring, cfg: RadarConfig): ResultadoScoring {
   const p = cfg.scoring;
@@ -30,8 +33,9 @@ export function puntuar(e: EntradaScoring, cfg: RadarConfig): ResultadoScoring {
   const motivos: string[] = [];
   let score = 0;
 
-  const negocioSerio =
-    (e.numResenas ?? 0) >= u.resenasMinimas && (e.valoracion ?? 0) >= u.valoracionMinima;
+  // Negocio activo de verdad: tiene telefono y horario publicados, o presencia en IG
+  const negocioActivo =
+    (Boolean(e.telefono) && e.tieneHorario) || (e.igSeguidores ?? 0) >= u.seguidoresNegocioActivo;
 
   // --- Senales de la web -------------------------------------------------
   if (!e.tieneWeb) {
@@ -41,20 +45,16 @@ export function puntuar(e: EntradaScoring, cfg: RadarConfig): ResultadoScoring {
     score += p.webRota;
     motivos.push('La web no carga o da error');
   } else {
-    if (e.puntuacionPsi != null && e.puntuacionPsi < 50) {
-      score += p.webLenta;
-      motivos.push(`Web muy lenta en movil (PageSpeed ${e.puntuacionPsi}/100)`);
-    } else if (e.segundosCarga != null && e.segundosCarga > u.segundosWebLenta) {
-      score += p.webLenta;
-      motivos.push(`Web lenta (${e.segundosCarga}s en cargar)`);
+    // Cada problema detectado suma, con tope para que no se dispare
+    const suma = Math.min(e.problemas.length * p.porProblemaWeb, p.topeProblemasWeb);
+    if (suma > 0) {
+      score += suma;
+      for (const problema of e.problemas.slice(0, 4)) motivos.push(problema);
+      if (e.problemas.length > 4) motivos.push(`y ${e.problemas.length - 4} fallos mas en la web`);
     }
-    if (e.responsive === false) {
-      score += p.webNoResponsive;
-      motivos.push('Web sin version movil');
-    }
-    if (e.https === false) {
-      score += p.sinHttps;
-      motivos.push('Web sin certificado de seguridad (HTTPS)');
+    if (e.plantillaBarata) {
+      score += p.plantillaBarata;
+      if (!motivos.some((m) => m.startsWith('Hecha con'))) motivos.push('Web de plantilla generica');
     }
   }
 
@@ -62,23 +62,28 @@ export function puntuar(e: EntradaScoring, cfg: RadarConfig): ResultadoScoring {
   if (e.igUltimaPublicacion) {
     const dias = Math.floor((Date.now() - new Date(e.igUltimaPublicacion).getTime()) / 86_400_000);
     if (dias > u.diasIgAbandonado) {
-      if (negocioSerio) {
-        score += p.buenasResenasIgAbandonado;
-        motivos.push(`Buen negocio (${e.valoracion}★) pero Instagram parado hace ${dias} dias`);
-      } else {
-        score += Math.round(p.buenasResenasIgAbandonado / 2);
-        motivos.push(`Instagram parado hace ${dias} dias`);
-      }
-    } else if (e.igEngagement != null && e.igEngagement < 1 && (e.igSeguidores ?? 0) > 300) {
+      score += p.igAbandonado;
+      motivos.push(`Instagram parado hace ${dias} dias`);
+    } else if (e.igEngagement != null && e.igEngagement < u.engagementBajo && (e.igSeguidores ?? 0) > 300) {
       score += p.engagementBajo;
       motivos.push(`Publica pero casi no le interactuan (${e.igEngagement}% de engagement)`);
     }
   }
 
+  if ((e.igSeguidores ?? 0) >= u.seguidoresNegocioActivo && (!e.tieneWeb || e.accesible === false)) {
+    score += p.audienciaSinWeb;
+    motivos.push(`${e.igSeguidores} seguidores en Instagram y ninguna web donde mandarlos`);
+  }
+
   // --- Senales del negocio ----------------------------------------------
-  if (negocioSerio) {
-    score += p.muchasResenas;
-    motivos.push(`${e.numResenas} resenas con ${e.valoracion}★ en Google`);
+  if (negocioActivo) {
+    score += p.negocioActivo;
+    motivos.push('Negocio en activo (datos de contacto y horario al dia)');
+  }
+
+  if (e.esCadena) {
+    score += p.esCadena;
+    motivos.push('Parece cadena o franquicia: probablemente decide otro');
   }
 
   if (e.sector && cfg.sectoresPrioritarios.includes(e.sector)) {
@@ -86,5 +91,5 @@ export function puntuar(e: EntradaScoring, cfg: RadarConfig): ResultadoScoring {
     motivos.push('Sector prioritario');
   }
 
-  return { score, motivos };
+  return { score: Math.max(score, 0), motivos };
 }

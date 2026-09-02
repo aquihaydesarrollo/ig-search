@@ -1,7 +1,7 @@
 import { getConfig } from './config.ts';
-import { query, queryOne } from './db.ts';
-import { buscarNegocios, coordenadasDeCiudad, type Negocio } from './places.ts';
-import { auditarWeb, puntuacionPageSpeed } from './web-audit.ts';
+import { query, queryOne, run, aEntero } from './db.ts';
+import { buscarNegocios, coordenadasDeCiudad, SECTORES, type Negocio } from './osm.ts';
+import { auditarWeb } from './web-audit.ts';
 import { perfilPublico, estadisticasPerfil, metricasPropias } from './meta.ts';
 import { puntuar } from './scoring.ts';
 
@@ -16,159 +16,144 @@ export interface ResumenEjecucion {
 
 const PAUSA = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Ejecuta el barrido completo del radar. Pensado para correr una vez al dia. */
 export async function ejecutarRadar(): Promise<ResumenEjecucion> {
   const cfg = getConfig();
   const avisos: string[] = [];
 
-  const ejecucion = await queryOne<{ id: number }>(
-    `INSERT INTO ejecuciones (estado) VALUES ('en_curso') RETURNING id`,
-  );
-  const ejecucionId = ejecucion!.id;
+  const { id: ejecucionId } = await run(`INSERT INTO ejecuciones (estado) VALUES ('en_curso')`);
 
   const resumen: ResumenEjecucion = {
-    ejecucionId,
-    negociosNuevos: 0,
-    websAuditadas: 0,
-    perfilesIg: 0,
-    tareasGeneradas: 0,
-    avisos,
+    ejecucionId: Number(ejecucionId),
+    negociosNuevos: 0, websAuditadas: 0, perfilesIg: 0, tareasGeneradas: 0, avisos,
   };
 
   try {
-    // 1. Coordenadas de la ciudad ---------------------------------------
+    // 1. Coordenadas ------------------------------------------------------
     let { lat, lng } = cfg.coordenadas;
     if (lat == null || lng == null) {
       const coords = await coordenadasDeCiudad(`${cfg.ciudad}, ${cfg.region}`);
       if (coords) { lat = coords.lat; lng = coords.lng; }
-      else avisos.push(`No se pudieron geolocalizar las coordenadas de ${cfg.ciudad}`);
+      else throw new Error(`No se pudieron obtener las coordenadas de ${cfg.ciudad}`);
     }
 
-    // 2. Descubrir negocios por sector -----------------------------------
-    for (const sector of cfg.sectores) {
-      try {
-        const encontrados = await buscarNegocios({
-          sector,
-          ciudad: cfg.ciudad,
-          region: cfg.region,
-          lat,
-          lng,
-          radioKm: cfg.radioKm,
-        });
-        resumen.negociosNuevos += await guardarNegocios(encontrados);
-      } catch (err: any) {
-        avisos.push(`Sector "${sector}": ${err.message}`);
-      }
+    // 2. Descubrir negocios en OpenStreetMap ------------------------------
+    // Una unica consulta con todos los sectores: Overpass es un servicio
+    // publico gratuito y 23 peticiones seguidas hacen que deje de responder.
+    const desconocidos = cfg.sectores.filter((s) => !SECTORES[s]);
+    if (desconocidos.length) avisos.push(`Sectores desconocidos en la configuracion: ${desconocidos.join(', ')}`);
+
+    const sectores = cfg.sectores.filter((s) => SECTORES[s]);
+    try {
+      const encontrados = await buscarNegocios({ sectores, lat, lng, radioKm: cfg.radioKm });
+      resumen.negociosNuevos += await guardarNegocios(encontrados);
+      if (encontrados.length === 0) avisos.push('OpenStreetMap no devolvio ningun negocio para esta zona');
+    } catch (err: any) {
+      avisos.push(`Descubrimiento de negocios: ${err.message}`);
     }
 
-    // 3. Auditar webs no revisadas (o revisadas hace mas de 30 dias) ------
+    // 3. Auditar webs -----------------------------------------------------
     const pendientes = await query<{ id: string; web: string | null }>(
       `SELECT n.id, n.web
          FROM negocios n
          LEFT JOIN auditorias_web a ON a.negocio_id = n.id
-        WHERE a.negocio_id IS NULL OR a.revisado_en < now() - interval '30 days'
-        ORDER BY n.num_resenas DESC NULLS LAST
-        LIMIT 120`,
+        WHERE a.negocio_id IS NULL OR a.revisado_en < datetime('now','-30 days')
+        ORDER BY (n.web IS NOT NULL) DESC, n.nombre
+        LIMIT ?`,
+      [cfg.umbrales.maxWebsPorBarrido],
     );
 
     for (const negocio of pendientes) {
-      const auditoria = await auditarWeb(negocio.web);
-      await query(
+      const a = await auditarWeb(negocio.web);
+      await run(
         `INSERT INTO auditorias_web
-           (negocio_id, tiene_web, accesible, codigo_http, https, responsive,
-            segundos_carga, titulo, instagram_handle, notas, revisado_en)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
-         ON CONFLICT (negocio_id) DO UPDATE SET
-           tiene_web = EXCLUDED.tiene_web, accesible = EXCLUDED.accesible,
-           codigo_http = EXCLUDED.codigo_http, https = EXCLUDED.https,
-           responsive = EXCLUDED.responsive, segundos_carga = EXCLUDED.segundos_carga,
-           titulo = EXCLUDED.titulo, instagram_handle = EXCLUDED.instagram_handle,
-           notas = EXCLUDED.notas, revisado_en = now()`,
-        [
-          negocio.id, auditoria.tieneWeb, auditoria.accesible, auditoria.codigoHttp,
-          auditoria.https, auditoria.responsive, auditoria.segundosCarga,
-          auditoria.titulo, auditoria.instagramHandle, auditoria.notas,
-        ],
+           (negocio_id, tiene_web, accesible, codigo_http, https, responsive, segundos_carga,
+            peso_kb, tecnologia, plantilla_barata, anio_copyright, titulo, instagram_handle,
+            problemas, notas, revisado_en)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
+         ON CONFLICT(negocio_id) DO UPDATE SET
+           tiene_web = excluded.tiene_web, accesible = excluded.accesible,
+           codigo_http = excluded.codigo_http, https = excluded.https,
+           responsive = excluded.responsive, segundos_carga = excluded.segundos_carga,
+           peso_kb = excluded.peso_kb, tecnologia = excluded.tecnologia,
+           plantilla_barata = excluded.plantilla_barata, anio_copyright = excluded.anio_copyright,
+           titulo = excluded.titulo, instagram_handle = excluded.instagram_handle,
+           problemas = excluded.problemas, notas = excluded.notas, revisado_en = datetime('now')`,
+        [negocio.id, aEntero(a.tieneWeb), aEntero(a.accesible), a.codigoHttp, aEntero(a.https),
+         aEntero(a.responsive), a.segundosCarga, a.pesoKb, a.tecnologia, aEntero(a.plantillaBarata),
+         a.anioCopyright, a.titulo, a.instagramHandle, JSON.stringify(a.problemas), a.notas],
       );
       resumen.websAuditadas++;
-      await PAUSA(200);
+      await PAUSA(150);
     }
 
-    // 4. Datos de Instagram de los negocios con handle detectado ----------
+    // 4. Instagram ---------------------------------------------------------
     if (process.env.META_ACCESS_TOKEN && process.env.META_IG_USER_ID) {
-      const conHandle = await query<{ negocio_id: string; instagram_handle: string }>(
-        `SELECT a.negocio_id, a.instagram_handle
-           FROM auditorias_web a
-           LEFT JOIN perfiles_ig p ON p.handle = a.instagram_handle
-          WHERE a.instagram_handle IS NOT NULL
-            AND (p.handle IS NULL OR p.revisado_en < now() - interval '14 days')
+      const conHandle = await query<{ negocio_id: string; handle: string }>(
+        `SELECT n.id AS negocio_id,
+                COALESCE(n.instagram_tag, a.instagram_handle) AS handle
+           FROM negocios n
+           LEFT JOIN auditorias_web a ON a.negocio_id = n.id
+           LEFT JOIN perfiles_ig p ON p.handle = COALESCE(n.instagram_tag, a.instagram_handle)
+          WHERE COALESCE(n.instagram_tag, a.instagram_handle) IS NOT NULL
+            AND (p.handle IS NULL OR p.revisado_en < datetime('now','-14 days'))
           LIMIT 80`,
       );
 
       for (const fila of conHandle) {
         try {
-          const perfil = await perfilPublico(fila.instagram_handle);
+          const perfil = await perfilPublico(fila.handle);
           if (!perfil) continue;
           await guardarPerfil(perfil, fila.negocio_id, false);
           resumen.perfilesIg++;
           await PAUSA(400);
         } catch (err: any) {
-          avisos.push(`Instagram @${fila.instagram_handle}: ${err.message}`);
+          avisos.push(`Instagram @${fila.handle}: ${err.message}`);
         }
       }
 
-      // 5. Competidores -------------------------------------------------
       for (const handle of cfg.competidores) {
         try {
           const perfil = await perfilPublico(handle, 25);
           if (perfil) { await guardarPerfil(perfil, null, true); await PAUSA(400); }
-          else avisos.push(`Competidor @${handle}: no accesible (privado o no profesional)`);
+          else avisos.push(`Competidor @${handle}: no accesible (privado o cuenta no profesional)`);
         } catch (err: any) {
           avisos.push(`Competidor @${handle}: ${err.message}`);
         }
       }
 
-      // 6. Metricas propias ---------------------------------------------
       try {
         const m = await metricasPropias();
-        await query(
+        await run(
           `INSERT INTO metricas_propias (fecha, seguidores, alcance, visitas_perfil, clics_web, interacciones)
-           VALUES (CURRENT_DATE,$1,$2,$3,$4,$5)
-           ON CONFLICT (fecha) DO UPDATE SET
-             seguidores = EXCLUDED.seguidores, alcance = EXCLUDED.alcance,
-             visitas_perfil = EXCLUDED.visitas_perfil, clics_web = EXCLUDED.clics_web,
-             interacciones = EXCLUDED.interacciones`,
+           VALUES (date('now'),?,?,?,?,?)
+           ON CONFLICT(fecha) DO UPDATE SET
+             seguidores = excluded.seguidores, alcance = excluded.alcance,
+             visitas_perfil = excluded.visitas_perfil, clics_web = excluded.clics_web,
+             interacciones = excluded.interacciones`,
           [m.seguidores, m.alcance, m.visitasPerfil, m.clicsWeb, m.interacciones],
         );
       } catch (err: any) {
         avisos.push(`Metricas propias: ${err.message}`);
       }
     } else {
-      avisos.push('Sin credenciales de Meta: se omiten los datos de Instagram');
+      avisos.push('Sin credenciales de Meta: se omiten todos los datos de Instagram');
     }
 
-    // 7. Recalcular puntuaciones -----------------------------------------
+    // 5. Puntuar y generar tareas -----------------------------------------
     await recalcularLeads();
-
-    // 8. PageSpeed solo para los mejores leads ---------------------------
-    await afinarConPageSpeed(20);
-    await recalcularLeads();
-
-    // 9. Generar la lista de tareas de hoy -------------------------------
     resumen.tareasGeneradas = await generarTareasDeHoy();
 
-    await query(
-      `UPDATE ejecuciones SET terminada_en = now(), estado = 'ok',
-              negocios_nuevos = $2, webs_auditadas = $3, perfiles_ig = $4, tareas_generadas = $5,
-              error = $6
-        WHERE id = $1`,
-      [ejecucionId, resumen.negociosNuevos, resumen.websAuditadas, resumen.perfilesIg,
-       resumen.tareasGeneradas, avisos.length ? avisos.join(' | ').slice(0, 2000) : null],
+    await run(
+      `UPDATE ejecuciones SET terminada_en = datetime('now'), estado = 'ok',
+              negocios_nuevos = ?, webs_auditadas = ?, perfiles_ig = ?, tareas_generadas = ?, error = ?
+        WHERE id = ?`,
+      [resumen.negociosNuevos, resumen.websAuditadas, resumen.perfilesIg, resumen.tareasGeneradas,
+       avisos.length ? avisos.join(' | ').slice(0, 2000) : null, resumen.ejecucionId],
     );
   } catch (err: any) {
-    await query(
-      `UPDATE ejecuciones SET terminada_en = now(), estado = 'error', error = $2 WHERE id = $1`,
-      [ejecucionId, String(err?.message ?? err).slice(0, 2000)],
+    await run(
+      `UPDATE ejecuciones SET terminada_en = datetime('now'), estado = 'error', error = ? WHERE id = ?`,
+      [String(err?.message ?? err).slice(0, 2000), resumen.ejecucionId],
     );
     throw err;
   }
@@ -179,20 +164,20 @@ export async function ejecutarRadar(): Promise<ResumenEjecucion> {
 async function guardarNegocios(negocios: Negocio[]): Promise<number> {
   let nuevos = 0;
   for (const n of negocios) {
-    const res = await query<{ insertado: boolean }>(
+    const existe = await queryOne(`SELECT 1 AS x FROM negocios WHERE id = ?`, [n.id]);
+    await run(
       `INSERT INTO negocios
-         (id, nombre, sector, direccion, telefono, web, google_maps_url,
-          valoracion, num_resenas, lat, lng)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-       ON CONFLICT (id) DO UPDATE SET
-         nombre = EXCLUDED.nombre, web = EXCLUDED.web, telefono = EXCLUDED.telefono,
-         valoracion = EXCLUDED.valoracion, num_resenas = EXCLUDED.num_resenas,
-         actualizado_en = now()
-       RETURNING (xmax = 0) AS insertado`,
-      [n.id, n.nombre, n.sector, n.direccion, n.telefono, n.web, n.googleMapsUrl,
-       n.valoracion, n.numResenas, n.lat, n.lng],
+         (id, nombre, sector, direccion, telefono, web, osm_url, instagram_tag,
+          tiene_horario, es_cadena, lat, lng)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET
+         nombre = excluded.nombre, web = excluded.web, telefono = excluded.telefono,
+         instagram_tag = excluded.instagram_tag, tiene_horario = excluded.tiene_horario,
+         actualizado_en = datetime('now')`,
+      [n.id, n.nombre, n.sector, n.direccion, n.telefono, n.web, n.osmUrl, n.instagramTag,
+       aEntero(n.tieneHorario), aEntero(n.esCadena), n.lat, n.lng],
     );
-    if (res[0]?.insertado) nuevos++;
+    if (!existe) nuevos++;
   }
   return nuevos;
 }
@@ -205,153 +190,126 @@ async function guardarPerfil(
   if (!perfil) return;
   const stats = estadisticasPerfil(perfil);
 
-  await query(
+  await run(
     `INSERT INTO perfiles_ig
        (handle, negocio_id, seguidores, num_publicaciones, biografia, web_perfil,
         ultima_publicacion, engagement_medio, frecuencia_semanal, es_competidor, revisado_en)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now())
-     ON CONFLICT (handle) DO UPDATE SET
-       negocio_id = COALESCE(EXCLUDED.negocio_id, perfiles_ig.negocio_id),
-       seguidores = EXCLUDED.seguidores, num_publicaciones = EXCLUDED.num_publicaciones,
-       biografia = EXCLUDED.biografia, web_perfil = EXCLUDED.web_perfil,
-       ultima_publicacion = EXCLUDED.ultima_publicacion,
-       engagement_medio = EXCLUDED.engagement_medio,
-       frecuencia_semanal = EXCLUDED.frecuencia_semanal,
-       es_competidor = perfiles_ig.es_competidor OR EXCLUDED.es_competidor,
-       revisado_en = now()`,
+     VALUES (?,?,?,?,?,?,?,?,?,?, datetime('now'))
+     ON CONFLICT(handle) DO UPDATE SET
+       negocio_id = COALESCE(excluded.negocio_id, perfiles_ig.negocio_id),
+       seguidores = excluded.seguidores, num_publicaciones = excluded.num_publicaciones,
+       biografia = excluded.biografia, web_perfil = excluded.web_perfil,
+       ultima_publicacion = excluded.ultima_publicacion,
+       engagement_medio = excluded.engagement_medio,
+       frecuencia_semanal = excluded.frecuencia_semanal,
+       es_competidor = MAX(perfiles_ig.es_competidor, excluded.es_competidor),
+       revisado_en = datetime('now')`,
     [perfil.handle, negocioId, perfil.seguidores, perfil.numPublicaciones, perfil.biografia,
      perfil.webPerfil, stats.ultimaPublicacion, stats.engagementMedio, stats.frecuenciaSemanal,
-     esCompetidor],
+     aEntero(esCompetidor)],
   );
 
   for (const post of perfil.publicaciones) {
-    await query(
+    await run(
       `INSERT INTO publicaciones (id, handle, tipo, texto, permalink, likes, comentarios, publicada_en)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       ON CONFLICT (id) DO UPDATE SET
-         likes = EXCLUDED.likes, comentarios = EXCLUDED.comentarios`,
+       VALUES (?,?,?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET likes = excluded.likes, comentarios = excluded.comentarios`,
       [post.id, perfil.handle, post.tipo, post.texto, post.permalink,
        post.likes, post.comentarios, post.publicadaEn],
     );
   }
 }
 
-/** Recorre todos los negocios auditados y recalcula su puntuacion de oportunidad. */
 export async function recalcularLeads(): Promise<number> {
   const cfg = getConfig();
   const filas = await query<any>(
-    `SELECT n.id, n.sector, n.valoracion, n.num_resenas,
-            a.tiene_web, a.accesible, a.https, a.responsive, a.segundos_carga, a.puntuacion_psi,
-            p.seguidores AS ig_seguidores, p.ultima_publicacion AS ig_ultima, p.engagement_medio AS ig_engagement
+    `SELECT n.id, n.sector, n.telefono, n.tiene_horario, n.es_cadena,
+            a.tiene_web, a.accesible, a.problemas, a.plantilla_barata, a.anio_copyright,
+            p.seguidores AS ig_seguidores, p.ultima_publicacion AS ig_ultima,
+            p.engagement_medio AS ig_engagement
        FROM negocios n
        JOIN auditorias_web a ON a.negocio_id = n.id
        LEFT JOIN perfiles_ig p ON p.negocio_id = n.id`,
   );
 
   for (const f of filas) {
+    let problemas: string[] = [];
+    try { problemas = JSON.parse(f.problemas ?? '[]'); } catch { problemas = []; }
+
     const { score, motivos } = puntuar(
       {
         sector: f.sector,
-        valoracion: f.valoracion != null ? Number(f.valoracion) : null,
-        numResenas: f.num_resenas,
-        tieneWeb: f.tiene_web,
-        accesible: f.accesible,
-        https: f.https,
-        responsive: f.responsive,
-        segundosCarga: f.segundos_carga != null ? Number(f.segundos_carga) : null,
-        puntuacionPsi: f.puntuacion_psi,
+        tieneWeb: Boolean(f.tiene_web),
+        accesible: f.accesible === null ? null : Boolean(f.accesible),
+        problemas,
+        plantillaBarata: f.plantilla_barata === null ? null : Boolean(f.plantilla_barata),
+        anioCopyright: f.anio_copyright,
+        telefono: f.telefono,
+        tieneHorario: Boolean(f.tiene_horario),
+        esCadena: Boolean(f.es_cadena),
         igSeguidores: f.ig_seguidores,
-        igUltimaPublicacion: f.ig_ultima ? new Date(f.ig_ultima).toISOString() : null,
-        igEngagement: f.ig_engagement != null ? Number(f.ig_engagement) : null,
+        igUltimaPublicacion: f.ig_ultima,
+        igEngagement: f.ig_engagement,
       },
       cfg,
     );
 
-    await query(
+    await run(
       `INSERT INTO leads (negocio_id, score, motivos, calculado_en)
-       VALUES ($1,$2,$3::jsonb, now())
-       ON CONFLICT (negocio_id) DO UPDATE SET
-         score = EXCLUDED.score, motivos = EXCLUDED.motivos, calculado_en = now()`,
+       VALUES (?,?,?, datetime('now'))
+       ON CONFLICT(negocio_id) DO UPDATE SET
+         score = excluded.score, motivos = excluded.motivos, calculado_en = datetime('now')`,
       [f.id, score, JSON.stringify(motivos)],
     );
   }
   return filas.length;
 }
 
-/** Ejecuta PageSpeed solo sobre los mejores leads con web accesible aun sin medir. */
-async function afinarConPageSpeed(limite: number) {
-  if (!process.env.GOOGLE_PAGESPEED_API_KEY) return;
-
-  const candidatos = await query<{ id: string; web: string }>(
-    `SELECT n.id, n.web
-       FROM leads l
-       JOIN negocios n ON n.id = l.negocio_id
-       JOIN auditorias_web a ON a.negocio_id = n.id
-      WHERE a.accesible = true AND a.puntuacion_psi IS NULL AND n.web IS NOT NULL
-      ORDER BY l.score DESC
-      LIMIT $1`,
-    [limite],
-  );
-
-  for (const c of candidatos) {
-    const score = await puntuacionPageSpeed(c.web);
-    if (score != null) {
-      await query(`UPDATE auditorias_web SET puntuacion_psi = $2 WHERE negocio_id = $1`, [c.id, score]);
-    }
-    await PAUSA(1000);
-  }
-}
-
-/** Construye la lista de acciones del dia respetando los limites configurados. */
 export async function generarTareasDeHoy(): Promise<number> {
   const cfg = getConfig();
 
-  const yaHay = await queryOne<{ n: string }>(
-    `SELECT count(*)::text AS n FROM tareas_diarias WHERE fecha = CURRENT_DATE`,
+  const yaHay = await queryOne<{ n: number }>(
+    `SELECT count(*) AS n FROM tareas_diarias WHERE fecha = date('now')`,
   );
-  if (Number(yaHay?.n ?? 0) > 0) return 0;
-
-  const total = cfg.limitesDiarios.comentarios + cfg.limitesDiarios.seguimientos;
+  if ((yaHay?.n ?? 0) > 0) return 0;
 
   const candidatos = await query<any>(
-    `SELECT n.id, n.nombre, n.sector, n.valoracion, n.num_resenas, n.google_maps_url,
+    `SELECT n.id, n.nombre, n.sector, n.telefono, n.osm_url,
             l.score, l.motivos,
-            a.instagram_handle,
-            p.handle AS ig_handle, p.seguidores, p.ultima_publicacion,
+            COALESCE(n.instagram_tag, a.instagram_handle) AS handle,
+            p.seguidores,
             (SELECT permalink FROM publicaciones pub
               WHERE pub.handle = p.handle ORDER BY pub.publicada_en DESC LIMIT 1) AS ultimo_post
        FROM leads l
        JOIN negocios n ON n.id = l.negocio_id
-       JOIN auditorias_web a ON a.negocio_id = n.id
+       LEFT JOIN auditorias_web a ON a.negocio_id = n.id
        LEFT JOIN perfiles_ig p ON p.negocio_id = n.id
       WHERE l.estado = 'nuevo'
         AND NOT EXISTS (SELECT 1 FROM tareas_diarias t WHERE t.negocio_id = n.id)
-      ORDER BY l.score DESC, n.num_resenas DESC NULLS LAST
-      LIMIT $1`,
-    [Math.max(total, cfg.umbrales.leadsPorDia)],
+      ORDER BY l.score DESC, n.nombre
+      LIMIT ?`,
+    [cfg.umbrales.leadsPorDia],
   );
 
-  let creadas = 0;
-  let comentarios = 0;
-  let seguimientos = 0;
+  let creadas = 0, comentarios = 0, seguimientos = 0;
 
   for (const c of candidatos) {
-    const handle = c.ig_handle ?? c.instagram_handle;
-    const motivos: string[] = Array.isArray(c.motivos) ? c.motivos : [];
-    const contexto = [
-      `${c.nombre} (${c.sector ?? 'sin sector'})`,
-      c.valoracion ? `${c.valoracion}★ con ${c.num_resenas} resenas` : null,
-      ...motivos,
-    ].filter(Boolean).join(' · ');
+    let motivos: string[] = [];
+    try { motivos = JSON.parse(c.motivos ?? '[]'); } catch { motivos = []; }
 
-    if (handle && c.ultimo_post && comentarios < cfg.limitesDiarios.comentarios) {
-      await crearTarea('comentar', c.id, handle, c.ultimo_post, contexto);
+    const nombreSector = SECTORES[c.sector]?.nombre ?? c.sector ?? 'sin sector';
+    const contexto = [`${c.nombre} (${nombreSector})`, ...motivos].join(' · ');
+
+    if (c.handle && c.ultimo_post && comentarios < cfg.limitesDiarios.comentarios) {
+      await crearTarea('comentar', c.id, c.handle, c.ultimo_post, contexto);
       comentarios++; creadas++;
-    } else if (handle && seguimientos < cfg.limitesDiarios.seguimientos) {
-      await crearTarea('seguir', c.id, handle, `https://instagram.com/${handle}`, contexto);
+    } else if (c.handle && seguimientos < cfg.limitesDiarios.seguimientos) {
+      await crearTarea('seguir', c.id, c.handle, `https://instagram.com/${c.handle}`, contexto);
       seguimientos++; creadas++;
-    } else if (!handle) {
-      await crearTarea('revisar', c.id, null, c.google_maps_url, `${contexto} · Sin Instagram localizado: buscar a mano o contactar por telefono`);
+    } else if (!c.handle) {
+      const extra = c.telefono ? ` · Teléfono: ${c.telefono}` : '';
+      await crearTarea('revisar', c.id, null, c.osm_url,
+        `${contexto} · Sin Instagram localizado: búscalo a mano o llama${extra}`);
       creadas++;
     }
 
@@ -362,15 +320,12 @@ export async function generarTareasDeHoy(): Promise<number> {
 }
 
 async function crearTarea(
-  tipo: string,
-  negocioId: string | null,
-  handle: string | null,
-  enlace: string | null,
-  contexto: string,
+  tipo: string, negocioId: string | null, handle: string | null,
+  enlace: string | null, contexto: string,
 ) {
-  await query(
+  await run(
     `INSERT INTO tareas_diarias (fecha, tipo, negocio_id, handle, enlace, contexto)
-     VALUES (CURRENT_DATE, $1, $2, $3, $4, $5)`,
+     VALUES (date('now'), ?, ?, ?, ?, ?)`,
     [tipo, negocioId, handle, enlace, contexto],
   );
 }

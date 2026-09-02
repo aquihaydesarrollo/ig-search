@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { run } from '@/lib/db';
 
 const ESTADOS = ['nuevo', 'contactado', 'en_conversacion', 'cliente', 'descartado'];
 
@@ -8,10 +8,7 @@ export async function POST(req: Request) {
   if (typeof negocioId !== 'string' || !ESTADOS.includes(estado)) {
     return NextResponse.json({ error: 'Parametros invalidos' }, { status: 400 });
   }
-
-  await query(
-    `UPDATE leads SET estado = $2, nota = COALESCE($3, nota) WHERE negocio_id = $1`,
-    [negocioId, estado, nota ?? null],
-  );
+  await run(`UPDATE leads SET estado = ?, nota = COALESCE(?, nota) WHERE negocio_id = ?`,
+    [estado, nota ?? null, negocioId]);
   return NextResponse.json({ ok: true });
 }

@@ -4,15 +4,8 @@
  *   npm run radar             -> barrido completo
  *   npm run radar -- --whoami -> muestra la cuenta de Instagram vinculada al token
  */
-import fs from 'node:fs';
-import path from 'node:path';
-const envFile = path.join(process.cwd(), '.env.local');
-if (fs.existsSync(envFile)) {
-  for (const linea of fs.readFileSync(envFile, 'utf8').split('\n')) {
-    const m = linea.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim();
-  }
-}
+import { cargarEntorno } from './_env.mjs';
+cargarEntorno();
 
 const args = process.argv.slice(2);
 
@@ -25,11 +18,14 @@ if (args.includes('--whoami')) {
     process.exit(1);
   }
   console.log('Pagina de Facebook :', cuenta.pageName, `(${cuenta.pageId})`);
-  console.log('Instagram          :', '@' + cuenta.igUsername);
+  console.log('Instagram          : @' + cuenta.igUsername);
   console.log('META_IG_USER_ID    :', cuenta.igUserId);
   console.log('\nCopia ese META_IG_USER_ID en tu .env.local');
   process.exit(0);
 }
+
+const { crearEsquema } = await import('../src/lib/db.ts');
+crearEsquema();
 
 const { ejecutarRadar } = await import('../src/lib/radar.ts');
 const inicio = Date.now();

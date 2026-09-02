@@ -1,25 +1,44 @@
 {
-  "ciudad": "PENDIENTE",
-  "region": "Espana",
+  "ciudad": "Murcia",
+  "region": "España",
   "radioKm": 25,
-  "coordenadas": { "lat": null, "lng": null },
+  "coordenadas": { "lat": 37.9922, "lng": -1.1307 },
 
   "sectores": [
-    "clinicas dentales",
+    "clinicas_dentales",
     "restaurantes",
-    "hoteles y alojamientos",
+    "bares_cafeterias",
+    "hoteles",
     "inmobiliarias",
-    "clinicas esteticas",
-    "talleres de coches",
-    "gimnasios y centros deportivos",
-    "asesorias y gestorias",
-    "tiendas de ropa",
-    "peluquerias y barberias"
+    "centros_esteticos",
+    "peluquerias",
+    "talleres_coches",
+    "gimnasios",
+    "asesorias",
+    "abogados",
+    "tiendas_ropa",
+    "fisioterapia",
+    "clinicas_medicas",
+    "veterinarios",
+    "opticas",
+    "panaderias",
+    "floristerias",
+    "joyerias",
+    "muebles_decoracion",
+    "reformas",
+    "academias",
+    "ferreterias"
   ],
 
   "sectoresPrioritarios": [],
 
-  "competidores": [],
+  "competidores": [
+    "chillypills",
+    "delefant_",
+    "beyonduniverse.es",
+    "nueveseisocho",
+    "portavozdigital"
+  ],
 
   "limitesDiarios": {
     "comentarios": 8,
@@ -30,20 +49,22 @@
   "scoring": {
     "sinWeb": 30,
     "webRota": 25,
-    "webLenta": 20,
-    "webNoResponsive": 15,
-    "sinHttps": 10,
-    "buenasResenasIgAbandonado": 20,
+    "porProblemaWeb": 7,
+    "topeProblemasWeb": 28,
+    "plantillaBarata": 12,
+    "igAbandonado": 20,
     "engagementBajo": 15,
+    "audienciaSinWeb": 20,
+    "negocioActivo": 10,
     "sectorPrioritario": 10,
-    "muchasResenas": 10
+    "esCadena": -25
   },
 
   "umbrales": {
-    "resenasMinimas": 15,
-    "valoracionMinima": 3.8,
     "diasIgAbandonado": 60,
-    "segundosWebLenta": 4,
-    "leadsPorDia": 25
+    "engagementBajo": 1,
+    "seguidoresNegocioActivo": 500,
+    "leadsPorDia": 25,
+    "maxWebsPorBarrido": 150
   }
 }

@@ -1,17 +1,22 @@
-import { query } from '@/lib/db';
+import { query, baseDatosExiste } from '@/lib/db';
+import AvisoConfiguracion from '@/components/AvisoConfiguracion';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Metricas() {
+  if (!baseDatosExiste()) {
+    return <AvisoConfiguracion mensaje="Falta crear la base de datos" detalle="Ejecuta: npm run db:init" />;
+  }
+
   const dias = await query<any>(
     `SELECT fecha, seguidores, alcance, visitas_perfil, clics_web, interacciones
        FROM metricas_propias ORDER BY fecha DESC LIMIT 30`,
   );
 
   const acciones = await query<any>(
-    `SELECT tipo, count(*) FILTER (WHERE hecha) AS hechas, count(*) AS total
+    `SELECT tipo, SUM(hecha) AS hechas, count(*) AS total
        FROM tareas_diarias
-      WHERE fecha > CURRENT_DATE - 30
+      WHERE fecha > date('now','-30 days')
       GROUP BY tipo ORDER BY total DESC`,
   );
 

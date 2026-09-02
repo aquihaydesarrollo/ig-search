@@ -1,0 +1,49 @@
+{
+  "ciudad": "PENDIENTE",
+  "region": "Espana",
+  "radioKm": 25,
+  "coordenadas": { "lat": null, "lng": null },
+
+  "sectores": [
+    "clinicas dentales",
+    "restaurantes",
+    "hoteles y alojamientos",
+    "inmobiliarias",
+    "clinicas esteticas",
+    "talleres de coches",
+    "gimnasios y centros deportivos",
+    "asesorias y gestorias",
+    "tiendas de ropa",
+    "peluquerias y barberias"
+  ],
+
+  "sectoresPrioritarios": [],
+
+  "competidores": [],
+
+  "limitesDiarios": {
+    "comentarios": 8,
+    "likes": 40,
+    "seguimientos": 12
+  },
+
+  "scoring": {
+    "sinWeb": 30,
+    "webRota": 25,
+    "webLenta": 20,
+    "webNoResponsive": 15,
+    "sinHttps": 10,
+    "buenasResenasIgAbandonado": 20,
+    "engagementBajo": 15,
+    "sectorPrioritario": 10,
+    "muchasResenas": 10
+  },
+
+  "umbrales": {
+    "resenasMinimas": 15,
+    "valoracionMinima": 3.8,
+    "diasIgAbandonado": 60,
+    "segundosWebLenta": 4,
+    "leadsPorDia": 25
+  }
+}

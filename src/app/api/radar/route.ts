@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { lanzarBarrido } from '@/lib/lanzador';
 import { queryOne } from '@/lib/db';
+import { ajuste } from '@/lib/ajustes';
 
 export const dynamic = 'force-dynamic';
 
 function autorizado(req: Request): boolean {
-  const secreto = process.env.RADAR_CRON_SECRET;
+  const secreto = ajuste('RADAR_CRON_SECRET');
   return Boolean(secreto) && req.headers.get('x-radar-secret') === secreto;
 }
 

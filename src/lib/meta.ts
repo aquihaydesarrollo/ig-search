@@ -11,14 +11,16 @@
  *   - Listar los seguidores o comentaristas de una cuenta ajena
  */
 
+import { ajuste } from './ajustes.ts';
+
 const BASE = 'https://graph.facebook.com';
 
 function apiVersion() {
-  return process.env.META_API_VERSION || 'v23.0';
+  return ajuste('META_API_VERSION') || 'v23.0';
 }
 
 function token() {
-  const t = process.env.META_ACCESS_TOKEN;
+  const t = ajuste('META_ACCESS_TOKEN');
   if (!t) throw new Error('Falta META_ACCESS_TOKEN');
   return t;
 }
@@ -54,7 +56,7 @@ export async function descubrirCuenta(): Promise<{ pageId: string; pageName: str
 }
 
 function igUserId() {
-  const id = process.env.META_IG_USER_ID;
+  const id = ajuste('META_IG_USER_ID');
   if (!id) throw new Error('Falta META_IG_USER_ID (ejecuta: npm run radar -- --whoami)');
   return id;
 }

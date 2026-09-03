@@ -1,5 +1,6 @@
 import { query, queryOne, rutaBaseDatos } from '@/lib/db';
 import { getConfig } from '@/lib/config';
+import { ajuste, rutaAjustes } from '@/lib/ajustes';
 import { SECTORES } from '@/lib/osm';
 import TareaFila, { type Tarea } from '@/components/TareaFila';
 import AvisoConfiguracion from '@/components/AvisoConfiguracion';
@@ -84,11 +85,11 @@ export default async function Hoy() {
         </section>
       )}
 
-      {!process.env.PANEL_PASSWORD && (
+      {!ajuste('PANEL_PASSWORD') && (
         <AvisoConfiguracion
           color="bg-coral"
           mensaje="Este panel es público"
-          detalle="Cualquiera con la dirección puede ver tus leads. Define la variable de entorno PANEL_PASSWORD para pedir contraseña al entrar."
+          detalle={`Cualquiera con la dirección puede ver tus leads.\n\nDefine PANEL_PASSWORD como variable de entorno (en Hostinger: Website Dashboard → Environment variables), o crea el fichero ${rutaAjustes()} con {"PANEL_PASSWORD": "tu-contraseña"}.`}
         />
       )}
 

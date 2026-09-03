@@ -4,6 +4,7 @@ import { buscarNegocios, coordenadasDeCiudad, SECTORES, type Negocio } from './o
 import { auditarWeb } from './web-audit.ts';
 import { perfilPublico, estadisticasPerfil, metricasPropias } from './meta.ts';
 import { puntuar } from './scoring.ts';
+import { ajuste } from './ajustes.ts';
 
 export interface ResumenEjecucion {
   ejecucionId: number;
@@ -107,7 +108,7 @@ export async function ejecutarRadar(): Promise<ResumenEjecucion> {
     }
 
     // 4. Instagram ---------------------------------------------------------
-    if (process.env.META_ACCESS_TOKEN && process.env.META_IG_USER_ID) {
+    if (ajuste('META_ACCESS_TOKEN') && ajuste('META_IG_USER_ID')) {
       const conHandle = await query<{ negocio_id: string; handle: string }>(
         `SELECT n.id AS negocio_id,
                 COALESCE(n.instagram_tag, a.instagram_handle) AS handle

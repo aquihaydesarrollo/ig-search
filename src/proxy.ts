@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { ajuste } from '@/lib/ajustes';
 
 /**
  * Protege el panel con contrasena (autenticacion basica del navegador).
@@ -10,11 +11,11 @@ import { NextResponse, type NextRequest } from 'next/server';
  * x-radar-secret, asi que esa ruta se deja pasar cuando el secreto coincide.
  */
 export function proxy(req: NextRequest) {
-  const password = process.env.PANEL_PASSWORD;
+  const password = ajuste('PANEL_PASSWORD');
   if (!password) return NextResponse.next();
 
   // Acceso de la tarea programada
-  const secreto = process.env.RADAR_CRON_SECRET;
+  const secreto = ajuste('RADAR_CRON_SECRET');
   if (secreto && req.headers.get('x-radar-secret') === secreto) {
     return NextResponse.next();
   }
@@ -46,6 +47,8 @@ function iguales(a: string, b: string): boolean {
   return diferencia === 0;
 }
 
+// El proxy de Next 16 siempre corre en Node, asi que puede leer el fichero
+// de ajustes del disco sin configuracion adicional.
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

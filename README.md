@@ -86,16 +86,33 @@ Usando solo tu propia cuenta, la app de Meta puede quedarse en modo desarrollo:
 ## Producción
 
 Requiere Node 20 o superior. No hace falta Python ni herramientas de compilación.
+`next build` genera salida `standalone`.
 
-`next build` genera salida `standalone`. Variables mínimas:
+**No hace falta configurar nada para arrancar.** La base de datos se crea sola en
+`~/.ig-search/igsearch.db`, en la carpeta personal del usuario, que sobrevive a los
+despliegues. El primer barrido se lanza con un botón del propio panel.
 
+### Ajustes
+
+Cada ajuste se busca primero en las variables de entorno y, si no está, en el fichero
+`~/.ig-search/ajustes.json`. El fichero existe porque no todos los planes de alojamiento
+dejan definir variables de entorno, y además se puede editar con el administrador de
+archivos sin volver a desplegar.
+
+```json
+{
+  "PANEL_PASSWORD": "una contraseña larga",
+  "RADAR_CRON_SECRET": "una cadena aleatoria",
+  "META_ACCESS_TOKEN": "",
+  "META_IG_USER_ID": ""
+}
 ```
-DATABASE_FILE=/ruta/persistente/fuera/del/despliegue/igsearch.db
-RADAR_CRON_SECRET=<cadena aleatoria>
-```
 
-`DATABASE_FILE` debe apuntar **fuera de la carpeta de la aplicación** para que la base
-de datos sobreviva a las actualizaciones.
+En Hostinger las variables de entorno están en **Website Dashboard → Environment
+variables → Apply changes**; no hace falta volver a desplegar al aplicarlas.
+
+**Pon `PANEL_PASSWORD`.** Sin ella el panel queda abierto a cualquiera que conozca la
+dirección, y la página de inicio lo advierte.
 
 Tarea programada diaria:
 
@@ -108,6 +125,7 @@ curl -X POST https://TU-DOMINIO/api/radar -H "x-radar-secret: $RADAR_CRON_SECRET
 ```
 config/radar.json      Ciudad, sectores, competidores, límites y pesos del scoring
 db/schema.sql          Esquema SQLite
+src/lib/ajustes.ts     Ajustes: variables de entorno o ~/.ig-search/ajustes.json
 scripts/db-init.mjs    Crea la base de datos
 scripts/run-radar.mjs  Ejecuta el barrido (--whoami para ver la cuenta de IG)
 scripts/meta-token.mjs Convierte el token temporal de Meta en permanente

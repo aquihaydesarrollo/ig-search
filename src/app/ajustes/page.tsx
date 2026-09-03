@@ -5,12 +5,38 @@ import FormularioAcceso from '@/components/FormularioAcceso';
 
 export const dynamic = 'force-dynamic';
 
-const PASOS = [
-  ['Cuenta profesional', 'Tu Instagram debe ser cuenta de empresa y estar vinculado a una página de Facebook.'],
-  ['Crear la app', 'En developers.facebook.com → Mis apps → Crear app. Tipo «Otro», luego «Empresa». Ponle el nombre que quieras.'],
-  ['Copiar las credenciales', 'Dentro de la app, Configuración → Básica. Ahí están el identificador y la clave secreta.'],
-  ['Generar el token temporal', 'En el Explorador de la API, selecciona tu app arriba a la derecha, añade los permisos pages_show_list, pages_read_engagement, instagram_basic e instagram_manage_insights, y pulsa «Generar token de acceso».'],
-  ['Pegarlo aquí abajo', 'Los tres datos en el formulario y a conectar. El token temporal se convierte solo en uno permanente.'],
+const PASOS: Array<[string, string]> = [
+  ['Cuenta profesional vinculada',
+   'Tu Instagram debe ser cuenta de empresa o creador Y estar vinculado a una página de Facebook. Se comprueba desde la app de Instagram: Configuración → Tipo de cuenta y herramientas.'],
+  ['Crear la app en Meta',
+   'developers.facebook.com → Mis apps → Crear app. Pon un nombre y tu correo. Cuando pregunte para qué es, elige la opción de gestionar contenido o páginas de Instagram; si no la ves, elige «Otro» y luego tipo «Empresa».'],
+  ['Elegir el acceso con Facebook',
+   'IMPORTANTE: si te da a elegir entre «Instagram API con inicio de sesión de Instagram» y «con inicio de sesión de Facebook», elige la de FACEBOOK. La otra no permite analizar cuentas ajenas.'],
+  ['Copiar identificador y clave',
+   'Dentro de la app: Configuración → Básica. Ahí están el identificador de la app y la clave secreta, con un botón «Mostrar».'],
+  ['Generar el token temporal',
+   'Ve al Explorador de la API. Arriba a la derecha selecciona tu app. En permisos añade estos cinco: pages_show_list, pages_read_engagement, instagram_basic, instagram_manage_insights y business_management. Pulsa «Generar token de acceso» y acepta.'],
+  ['Pegarlo aquí abajo',
+   'Los tres datos en el formulario. El token temporal caduca en un par de horas, pero al conectar se convierte solo en uno permanente.'],
+];
+
+const PERMISOS = [
+  ['pages_show_list', 'ver tus páginas de Facebook'],
+  ['pages_read_engagement', 'saber qué Instagram tiene vinculado cada página'],
+  ['instagram_basic', 'leer perfiles y publicaciones'],
+  ['instagram_manage_insights', 'tus métricas y las de cuentas ajenas'],
+  ['business_management', 'páginas que pertenecen a un Business Manager'],
+];
+
+const FALLOS: Array<[string, string]> = [
+  ['«El token no da acceso a ninguna página»',
+   'Al generar el token no marcaste pages_show_list, o no aceptaste la página en la ventana de permisos. Vuelve al Explorador y genera otro.'],
+  ['«Ninguna de tus páginas tiene Instagram vinculado»',
+   'La cuenta no está unida a la página. Se arregla desde la configuración de la página de Facebook, apartado Instagram.'],
+  ['«Error validating access token»',
+   'El token temporal ya caducó: duran una o dos horas. Genera uno nuevo y vuelve a conectar.'],
+  ['Análisis dice que no puede leer una cuenta',
+   'Esa cuenta es personal o privada. La API de Meta solo expone cuentas profesionales públicas.'],
 ];
 
 export default async function Ajustes() {
@@ -54,14 +80,38 @@ export default async function Ajustes() {
             <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener noreferrer"
                className="pill-secondary">Abrir el Explorador de la API</a>
           </div>
+          <div className="mt-6 pt-6 border-t border-ink/10">
+            <p className="text-body-sm font-medium mb-3">Los cinco permisos y para qué sirve cada uno</p>
+            <ul className="space-y-1.5">
+              {PERMISOS.map(([permiso, para]) => (
+                <li key={permiso} className="text-body-sm text-ink/70">
+                  <code className="font-mono text-ink">{permiso}</code> — {para}
+                </li>
+              ))}
+            </ul>
+          </div>
+
           <p className="text-body-sm text-ink/60 mt-5">
             Al usar solo tu propia cuenta, la app puede quedarse en modo desarrollo:
-            no hace falta pasar la revisión de Meta.
+            no hace falta pasar la revisión de Meta, que llevaría semanas.
           </p>
         </div>
 
         <div className="card">
           <FormularioInstagram conectado={conectado} />
+        </div>
+      </section>
+
+      {/* --- Si algo falla ------------------------------------------------ */}
+      <section className="space-y-4">
+        <h2 className="text-headline">Si algo falla</h2>
+        <div className="border-t border-hairline">
+          {FALLOS.map(([error, solucion]) => (
+            <div key={error} className="border-b border-hairline py-4">
+              <p className="text-body-sm font-medium">{error}</p>
+              <p className="text-body-sm text-ink/70 mt-1 leading-relaxed">{solucion}</p>
+            </div>
+          ))}
         </div>
       </section>
 

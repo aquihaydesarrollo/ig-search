@@ -85,13 +85,11 @@ export default async function Hoy() {
         </section>
       )}
 
-      {!ajuste('PANEL_PASSWORD') && (
-        <AvisoConfiguracion
-          color="bg-coral"
-          mensaje="Este panel es público"
-          detalle={'Cualquiera con la dirección puede ver tus leads. Define PANEL_PASSWORD para pedir contraseña al entrar: mira abajo, en Dónde va cada cosa, las rutas exactas de este servidor.'}
-        />
-      )}
+      <AvisoConfiguracion
+        color="bg-coral"
+        mensaje="Este panel es público"
+        detalle={'La contraseña está desactivada en el código: cualquiera con la dirección puede ver tus leads. Para reactivarla, pon AUTENTICACION_ACTIVA a true en src/proxy.ts y define PANEL_PASSWORD. Abre /api/diagnostico para ver de dónde toma cada ajuste este servidor.'}
+      />
 
       {tareas.length > 0 && (
         <section className="card py-0">

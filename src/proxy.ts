@@ -10,7 +10,21 @@ import { ajuste } from '@/lib/ajustes';
  * La tarea programada nocturna llama a /api/radar con la cabecera
  * x-radar-secret, asi que esa ruta se deja pasar cuando el secreto coincide.
  */
+/**
+ * Interruptor de la contrasena del panel.
+ *
+ * Puesto en false a peticion expresa: la contrasena rechazaba la correcta y
+ * bloqueaba el acceso. Con esto el panel abre siempre, sin importar lo que
+ * haya en ajustes.json ni en las variables de entorno.
+ *
+ * ATENCION: mientras esto sea false el panel es PUBLICO. Cualquiera con la
+ * direccion ve los leads. Volver a poner true cuando se resuelva.
+ */
+const AUTENTICACION_ACTIVA = false;
+
 export function proxy(req: NextRequest) {
+  if (!AUTENTICACION_ACTIVA) return NextResponse.next();
+
   // El diagnostico queda siempre abierto: sirve para cuando la contrasena
   // no deja entrar. No devuelve ningun valor, solo de donde sale cada ajuste.
   if (req.nextUrl.pathname === '/api/diagnostico') return NextResponse.next();

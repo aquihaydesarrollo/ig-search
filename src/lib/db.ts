@@ -1,16 +1,30 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import Database from 'better-sqlite3';
+// El paquete es CommonJS: la importacion por defecto funciona tanto en
+// el empaquetado de Next como al ejecutar los scripts con node a secas.
+import sqlite3 from 'node-sqlite3-wasm';
+
+const { Database } = sqlite3;
+type Database = InstanceType<typeof Database>;
+
+/**
+ * SQLite compilado a WebAssembly.
+ *
+ * Se eligio frente a better-sqlite3 porque este ultimo es un modulo nativo
+ * que hay que compilar con node-gyp, y muchos alojamientos compartidos
+ * (Hostinger entre ellos) no traen Python, asi que la instalacion falla.
+ * Esta version no compila nada y escribe el mismo fichero .db de siempre.
+ */
 
 declare global {
   // eslint-disable-next-line no-var
-  var _igSearchDb: Database.Database | undefined;
+  var _igSearchDb: Database | undefined;
 }
 
 /**
  * Ruta del fichero de base de datos.
- * Se puede mover fuera de la carpeta de despliegue con DATABASE_FILE
- * para que no se pierda al actualizar la aplicacion.
+ * En produccion conviene situarlo fuera de la carpeta de despliegue
+ * con DATABASE_FILE para que no se pierda al actualizar la aplicacion.
  */
 export function rutaBaseDatos(): string {
   return process.env.DATABASE_FILE || path.join(process.cwd(), 'data', 'igsearch.db');
@@ -21,14 +35,13 @@ export function baseDatosExiste(): boolean {
   return fs.existsSync(/*turbopackIgnore: true*/ rutaBaseDatos());
 }
 
-export function getDb(): Database.Database {
+export function getDb(): Database {
   if (!global._igSearchDb) {
     const ruta = rutaBaseDatos();
     fs.mkdirSync(path.dirname(ruta), { recursive: true });
     const db = new Database(ruta);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    db.pragma('busy_timeout = 5000');
+    db.run('PRAGMA foreign_keys = ON');
+    db.run('PRAGMA busy_timeout = 5000');
     global._igSearchDb = db;
   }
   return global._igSearchDb;
@@ -41,25 +54,17 @@ export function crearEsquema(): void {
 }
 
 export async function query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
-  const stmt = getDb().prepare(sql);
-  return (stmt.reader ? stmt.all(...params) : (stmt.run(...params), [])) as T[];
+  return getDb().all(sql, params) as T[];
 }
 
 export async function queryOne<T = any>(sql: string, params: any[] = []): Promise<T | null> {
-  const filas = await query<T>(sql, params);
-  return filas[0] ?? null;
+  return (getDb().get(sql, params) as T | undefined) ?? null;
 }
 
 /** Ejecuta una sentencia de escritura y devuelve cuantas filas cambiaron. */
-export async function run(sql: string, params: any[] = []): Promise<{ cambios: number; id: number | bigint }> {
-  const r = getDb().prepare(sql).run(...params);
-  return { cambios: r.changes, id: r.lastInsertRowid };
-}
-
-/** Convierte los enteros 0/1 de SQLite en booleanos de JavaScript. */
-export function bool(valor: unknown): boolean | null {
-  if (valor === null || valor === undefined) return null;
-  return Boolean(valor);
+export async function run(sql: string, params: any[] = []): Promise<{ cambios: number; id: number }> {
+  const r = getDb().run(sql, params);
+  return { cambios: r.changes, id: Number(r.lastInsertRowid) };
 }
 
 /** Convierte booleanos de JavaScript en los enteros que espera SQLite. */

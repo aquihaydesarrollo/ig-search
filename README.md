@@ -24,6 +24,12 @@ convierte; un like de bot, no.
 | Meta Graph API | Datos de Instagram | No | Gratis, requiere token |
 
 Sin Google. Sin base de datos externa: SQLite en un fichero.
+
+**Sin módulos nativos.** La base de datos usa SQLite compilado a WebAssembly
+(`node-sqlite3-wasm`), no `better-sqlite3`. Este último hay que compilarlo con
+node-gyp y Python, algo que muchos alojamientos compartidos no traen: la
+instalación falla con «Could not find any Python installation to use».
+Esta versión instala en cualquier sitio con solo Node.
 Sin el token de Meta el radar funciona igual, pero se queda sin ningún dato de Instagram.
 
 ## Qué hace
@@ -78,6 +84,8 @@ Usando solo tu propia cuenta, la app de Meta puede quedarse en modo desarrollo:
 **no hace falta pasar App Review**.
 
 ## Producción
+
+Requiere Node 20 o superior. No hace falta Python ni herramientas de compilación.
 
 `next build` genera salida `standalone`. Variables mínimas:
 

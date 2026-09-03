@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  serverExternalPackages: ['better-sqlite3'],
+  serverExternalPackages: ['node-sqlite3-wasm'],
   eslint: { ignoreDuringBuilds: true },
 };
 export default nextConfig;

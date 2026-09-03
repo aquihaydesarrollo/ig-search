@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 // El paquete es CommonJS: la importacion por defecto funciona tanto en
 // el empaquetado de Next como al ejecutar los scripts con node a secas.
 import sqlite3 from 'node-sqlite3-wasm';
@@ -23,11 +24,17 @@ declare global {
 
 /**
  * Ruta del fichero de base de datos.
- * En produccion conviene situarlo fuera de la carpeta de despliegue
- * con DATABASE_FILE para que no se pierda al actualizar la aplicacion.
+ *
+ * Por defecto va a la carpeta personal del usuario, NO a la del proyecto.
+ * Muchos alojamientos (Hostinger entre ellos) despliegan cada version en
+ * un directorio nuevo, asi que cualquier fichero dentro del proyecto se
+ * pierde en la siguiente actualizacion. La carpeta personal sobrevive.
+ *
+ * DATABASE_FILE permite fijar otra ruta si hiciera falta.
  */
 export function rutaBaseDatos(): string {
-  return process.env.DATABASE_FILE || path.join(process.cwd(), 'data', 'igsearch.db');
+  if (process.env.DATABASE_FILE) return process.env.DATABASE_FILE;
+  return path.join(os.homedir(), '.ig-search', 'igsearch.db');
 }
 
 export function baseDatosExiste(): boolean {
@@ -43,14 +50,29 @@ export function getDb(): Database {
     db.run('PRAGMA foreign_keys = ON');
     db.run('PRAGMA busy_timeout = 5000');
     global._igSearchDb = db;
+
+    // La aplicacion se crea su propia base de datos la primera vez.
+    // Asi no hace falta acceso por consola al servidor, que en muchos
+    // alojamientos compartidos no existe.
+    const sql = fs.readFileSync(path.join(process.cwd(), 'db', 'schema.sql'), 'utf8');
+    db.exec(sql);
   }
   return global._igSearchDb;
 }
 
-/** Ejecuta el esquema. Idempotente. */
+/** Ejecuta el esquema. Idempotente. Lo hace ya getDb(); se mantiene para los scripts. */
 export function crearEsquema(): void {
-  const sql = fs.readFileSync(path.join(process.cwd(), 'db', 'schema.sql'), 'utf8');
-  getDb().exec(sql);
+  getDb();
+}
+
+/** true si el esquema existe y ya se ha guardado algun negocio. */
+export function tieneDatos(): boolean {
+  try {
+    const fila = getDb().get('SELECT count(*) AS n FROM negocios') as { n: number } | undefined;
+    return (fila?.n ?? 0) > 0;
+  } catch {
+    return false;
+  }
 }
 
 export async function query<T = any>(sql: string, params: any[] = []): Promise<T[]> {

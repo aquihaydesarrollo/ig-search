@@ -1,20 +1,12 @@
-import { query, queryOne, baseDatosExiste, rutaBaseDatos } from '@/lib/db';
+import { query, queryOne, rutaBaseDatos } from '@/lib/db';
 import { getConfig } from '@/lib/config';
 import TareaFila, { type Tarea } from '@/components/TareaFila';
 import AvisoConfiguracion from '@/components/AvisoConfiguracion';
+import BotonRadar from '@/components/BotonRadar';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Hoy() {
-  if (!baseDatosExiste()) {
-    return (
-      <AvisoConfiguracion
-        mensaje="Falta crear la base de datos"
-        detalle={`No existe el fichero ${rutaBaseDatos()}.\n\nEjecuta en el servidor:\n  npm run db:init\n\nY después el primer barrido:\n  npm run radar`}
-      />
-    );
-  }
-
   const cfg = getConfig();
 
   const filas = await query<any>(
@@ -58,9 +50,20 @@ export default async function Hoy() {
       </div>
 
       {(stats?.negocios ?? 0) === 0 && (
+        <div className="tarjeta border-warn/50 bg-warn/10 space-y-3">
+          <p className="font-medium">Todavía no hay ningún negocio</p>
+          <p className="text-sm text-muted">
+            El primer barrido buscará negocios de {cfg.ciudad} en OpenStreetMap y auditará sus
+            webs. Tarda entre 15 y 25 minutos porque OpenStreetMap limita las consultas.
+          </p>
+          <BotonRadar texto="Ejecutar el primer barrido" />
+        </div>
+      )}
+
+      {!process.env.PANEL_PASSWORD && (
         <AvisoConfiguracion
-          mensaje="La base de datos está vacía"
-          detalle={`Ejecuta el primer barrido con:\n  npm run radar\n\nBuscará negocios de ${cfg.ciudad} en OpenStreetMap y auditará sus webs. Tarda varios minutos.`}
+          mensaje="Este panel es público"
+          detalle="Cualquiera con la dirección puede ver tus leads. Define la variable de entorno PANEL_PASSWORD para pedir contraseña al entrar."
         />
       )}
 
@@ -78,6 +81,18 @@ export default async function Hoy() {
           Instagram, a propósito. Las acciones las haces tú desde la app; aquí solo se registran.
         </p>
       </div>
+
+      {(stats?.negocios ?? 0) > 0 && (
+        <div className="tarjeta">
+          <p className="etiqueta mb-2">Barrido manual</p>
+          <p className="text-sm text-muted mb-3">
+            Normalmente lo lanza la tarea programada cada noche. Puedes forzarlo aquí.
+          </p>
+          <BotonRadar />
+        </div>
+      )}
+
+      <p className="text-xs text-muted">Base de datos: {rutaBaseDatos()}</p>
 
       {ultima && (
         <p className="text-xs text-muted">

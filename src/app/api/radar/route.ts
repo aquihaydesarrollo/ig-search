@@ -1,23 +1,34 @@
 import { NextResponse } from 'next/server';
-import { ejecutarRadar } from '@/lib/radar';
+import { lanzarBarrido } from '@/lib/lanzador';
+import { queryOne } from '@/lib/db';
 
-export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
-/**
- * Endpoint que dispara el barrido nocturno.
- * Protegido con la cabecera x-radar-secret (valor en RADAR_CRON_SECRET).
- */
-export async function POST(req: Request) {
+function autorizado(req: Request): boolean {
   const secreto = process.env.RADAR_CRON_SECRET;
-  if (!secreto || req.headers.get('x-radar-secret') !== secreto) {
+  return Boolean(secreto) && req.headers.get('x-radar-secret') === secreto;
+}
+
+/** Lanza el barrido nocturno. Responde al momento; no espera a que termine. */
+export async function POST(req: Request) {
+  if (!autorizado(req)) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
-  try {
-    const resumen = await ejecutarRadar();
-    return NextResponse.json({ ok: true, ...resumen });
-  } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message ?? err) }, { status: 500 });
+  const r = await lanzarBarrido();
+  return NextResponse.json(r, { status: r.ok ? 202 : 409 });
+}
+
+/** Estado del ultimo barrido, para poder comprobarlo desde fuera. */
+export async function GET(req: Request) {
+  if (!autorizado(req)) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
+
+  const ultima = await queryOne<any>(
+    `SELECT id, iniciada_en, terminada_en, estado, negocios_nuevos, webs_auditadas,
+            perfiles_ig, tareas_generadas, error
+       FROM ejecuciones ORDER BY id DESC LIMIT 1`,
+  );
+  return NextResponse.json(ultima ?? { estado: 'sin_ejecuciones' });
 }

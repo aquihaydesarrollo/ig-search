@@ -51,13 +51,33 @@ export async function ejecutarRadar(): Promise<ResumenEjecucion> {
       avisos.push(`Descubrimiento de negocios: ${err.message}`);
     }
 
-    // 3. Auditar webs -----------------------------------------------------
+    // 3a. Negocios sin web: no hay nada que visitar ------------------------
+    // Se registran de golpe y sin gastar peticiones. Son ademas los leads
+    // mas valiosos, asi que no deben esperar en la cola de auditorias.
+    const sinWeb = await query<{ id: string }>(
+      `SELECT n.id
+         FROM negocios n
+         LEFT JOIN auditorias_web a ON a.negocio_id = n.id
+        WHERE n.web IS NULL AND a.negocio_id IS NULL`,
+    );
+    for (const negocio of sinWeb) {
+      await run(
+        `INSERT INTO auditorias_web (negocio_id, tiene_web, problemas, revisado_en)
+         VALUES (?, 0, ?, datetime('now'))
+         ON CONFLICT(negocio_id) DO NOTHING`,
+        [negocio.id, JSON.stringify(['Sin web'])],
+      );
+      resumen.websAuditadas++;
+    }
+
+    // 3b. Auditar las webs que si existen ----------------------------------
     const pendientes = await query<{ id: string; web: string | null }>(
       `SELECT n.id, n.web
          FROM negocios n
          LEFT JOIN auditorias_web a ON a.negocio_id = n.id
-        WHERE a.negocio_id IS NULL OR a.revisado_en < datetime('now','-30 days')
-        ORDER BY (n.web IS NOT NULL) DESC, n.nombre
+        WHERE n.web IS NOT NULL
+          AND (a.negocio_id IS NULL OR a.revisado_en < datetime('now','-30 days'))
+        ORDER BY n.nombre
         LIMIT ?`,
       [cfg.umbrales.maxWebsPorBarrido],
     );

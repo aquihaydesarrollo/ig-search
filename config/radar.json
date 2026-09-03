@@ -2,8 +2,10 @@
   "ciudad": "Murcia",
   "region": "España",
   "radioKm": 25,
-  "coordenadas": { "lat": 37.9922, "lng": -1.1307 },
-
+  "coordenadas": {
+    "lat": 37.9922,
+    "lng": -1.1307
+  },
   "sectores": [
     "clinicas_dentales",
     "restaurantes",
@@ -29,9 +31,7 @@
     "academias",
     "ferreterias"
   ],
-
   "sectoresPrioritarios": [],
-
   "competidores": [
     "chillypills",
     "delefant_",
@@ -39,13 +39,11 @@
     "nueveseisocho",
     "portavozdigital"
   ],
-
   "limitesDiarios": {
     "comentarios": 8,
     "likes": 40,
     "seguimientos": 12
   },
-
   "scoring": {
     "sinWeb": 30,
     "webRota": 25,
@@ -59,12 +57,11 @@
     "sectorPrioritario": 10,
     "esCadena": -25
   },
-
   "umbrales": {
     "diasIgAbandonado": 60,
     "engagementBajo": 1,
     "seguidoresNegocioActivo": 500,
     "leadsPorDia": 25,
-    "maxWebsPorBarrido": 150
+    "maxWebsPorBarrido": 300
   }
 }

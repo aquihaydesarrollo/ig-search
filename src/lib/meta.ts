@@ -183,3 +183,80 @@ export function estadisticasPerfil(perfil: PerfilPublico) {
 
   return { engagementMedio, frecuenciaSemanal, ultimaPublicacion };
 }
+
+
+/**
+ * Convierte el token temporal del Explorador de la API en uno permanente.
+ *
+ * El token que da el Explorador dura una o dos horas. Se cambia por uno de
+ * usuario de larga duracion y, a partir de ese, por el token de la pagina de
+ * Facebook, que no caduca mientras no se cambie la contrasena ni se retiren
+ * los permisos de la aplicacion.
+ */
+export interface TokenPermanente {
+  tokenPagina: string;
+  igUserId: string;
+  igUsername: string;
+  paginaNombre: string;
+}
+
+export async function obtenerTokenPermanente(
+  appId: string,
+  appSecret: string,
+  tokenCorto: string,
+): Promise<TokenPermanente> {
+  const version = process.env.META_API_VERSION || 'v23.0';
+
+  async function llamar(ruta: string, params: Record<string, string>) {
+    const url = new URL(`${BASE}/${version}/${ruta}`);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    const res = await fetch(url, { cache: 'no-store' });
+    const datos = await res.json();
+    if (!res.ok || datos.error) throw new Error(datos?.error?.message ?? `HTTP ${res.status}`);
+    return datos;
+  }
+
+  // 1. Token de usuario de larga duracion
+  const largo = await llamar('oauth/access_token', {
+    grant_type: 'fb_exchange_token',
+    client_id: appId,
+    client_secret: appSecret,
+    fb_exchange_token: tokenCorto,
+  });
+
+  // 2. Paginas de Facebook accesibles con ese token
+  const paginas = await llamar('me/accounts', {
+    fields: 'id,name,access_token',
+    access_token: largo.access_token,
+  });
+
+  if (!paginas.data?.length) {
+    throw new Error(
+      'El token no da acceso a ninguna página de Facebook. ' +
+      'Al generarlo marca los permisos pages_show_list e instagram_basic.',
+    );
+  }
+
+  // 3. Pagina que tenga Instagram vinculado
+  for (const pagina of paginas.data) {
+    const detalle = await llamar(pagina.id, {
+      fields: 'instagram_business_account{id,username}',
+      access_token: pagina.access_token,
+    });
+    const ig = detalle.instagram_business_account;
+    if (ig?.id) {
+      return {
+        tokenPagina: pagina.access_token,
+        igUserId: ig.id,
+        igUsername: ig.username,
+        paginaNombre: pagina.name,
+      };
+    }
+  }
+
+  const nombres = paginas.data.map((p: any) => p.name).join(', ');
+  throw new Error(
+    `Ninguna de tus páginas tiene Instagram vinculado. Páginas encontradas: ${nombres}. ` +
+    'Vincúlalo desde la configuración de la página de Facebook.',
+  );
+}

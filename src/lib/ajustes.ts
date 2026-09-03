@@ -40,14 +40,14 @@ export function rutasCandidatas(): string[] {
 export function rutaAjustes(): string {
   const rutas = rutasCandidatas();
   for (const ruta of rutas) {
-    try { if (fs.existsSync(ruta)) return ruta; } catch { /* ignorar */ }
+    try { if (fs.existsSync(/*turbopackIgnore: true*/ ruta)) return ruta; } catch { /* ignorar */ }
   }
   return rutas[0];
 }
 
 export function ajustesExisten(): boolean {
   return rutasCandidatas().some((ruta) => {
-    try { return fs.existsSync(ruta); } catch { return false; }
+    try { return fs.existsSync(/*turbopackIgnore: true*/ ruta); } catch { return false; }
   });
 }
 
@@ -61,7 +61,7 @@ function leerFichero(): Record<string, string> {
   const encontrados: Record<string, string> = {};
   for (const ruta of rutasCandidatas()) {
     try {
-      const datos = JSON.parse(fs.readFileSync(ruta, 'utf8'));
+      const datos = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ ruta, 'utf8'));
       for (const clave of CLAVES) {
         const valor = datos?.[clave];
         // El primer fichero que define una clave manda

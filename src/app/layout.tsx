@@ -12,6 +12,7 @@ const NAV = [
   { href: '/leads', label: 'Leads' },
   { href: '/competencia', label: 'Competencia' },
   { href: '/metricas', label: 'Métricas' },
+  { href: '/ajustes', label: 'Ajustes' },
 ];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

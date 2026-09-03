@@ -35,8 +35,8 @@ export function getConfig(): RadarConfig {
 
   try {
     const enDisco = path.join(process.cwd(), 'config', 'radar.json');
-    if (fs.existsSync(enDisco)) {
-      cache = JSON.parse(fs.readFileSync(enDisco, 'utf8')) as RadarConfig;
+    if (fs.existsSync(/*turbopackIgnore: true*/ enDisco)) {
+      cache = JSON.parse(fs.readFileSync(/*turbopackIgnore: true*/ enDisco, 'utf8')) as RadarConfig;
       return cache;
     }
   } catch {

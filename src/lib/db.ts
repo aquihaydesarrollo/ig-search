@@ -52,7 +52,7 @@ export function rutasBaseDatos(): string[] {
 
   // Si solo existe la antigua, se usa esa para no perder los datos
   try {
-    if (!fs.existsSync(rutas[0]) && fs.existsSync(rutas[1])) {
+    if (!fs.existsSync(/*turbopackIgnore: true*/ rutas[0]) && fs.existsSync(/*turbopackIgnore: true*/ rutas[1])) {
       return [rutas[1], rutas[0], rutas[2]];
     }
   } catch { /* ignorar */ }
@@ -112,7 +112,7 @@ function limpiarAuxiliares(ruta: string) {
 /** Intenta abrir una ruta concreta, reparandola si hace falta. */
 function intentarRuta(ruta: string): Database | null {
   try {
-    fs.mkdirSync(path.dirname(ruta), { recursive: true });
+    fs.mkdirSync(/*turbopackIgnore: true*/ path.dirname(ruta), { recursive: true });
   } catch {
     return null; // sin permisos para crear la carpeta
   }

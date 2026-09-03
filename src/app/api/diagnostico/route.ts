@@ -30,7 +30,7 @@ export async function GET() {
         return info;
       }
       info.existe = true;
-      const bruto = fs.readFileSync(ruta, 'utf8');
+      const bruto = fs.readFileSync(/*turbopackIgnore: true*/ ruta, 'utf8');
       info.bytes = bruto.length;
       try {
         const datos = JSON.parse(bruto);
@@ -82,10 +82,10 @@ export async function GET() {
   // asi que pueden faltar en el despliegue.
   const recursos: Record<string, unknown> = {};
   for (const relativa of ['config/radar.json', 'db/schema.sql']) {
-    const ruta = path.join(process.cwd(), relativa);
+    const ruta = path.join(/*turbopackIgnore: true*/ process.cwd(), relativa);
     try {
-      if (!fs.existsSync(ruta)) { recursos[relativa] = 'NO EXISTE'; continue; }
-      const bruto = fs.readFileSync(ruta, 'utf8');
+      if (!fs.existsSync(/*turbopackIgnore: true*/ ruta)) { recursos[relativa] = 'NO EXISTE'; continue; }
+      const bruto = fs.readFileSync(/*turbopackIgnore: true*/ ruta, 'utf8');
       recursos[relativa] = relativa.endsWith('.json')
         ? (() => { try { JSON.parse(bruto); return `ok, ${bruto.length} bytes`; }
                    catch (e: any) { return `JSON invalido: ${e?.message}`; } })()
@@ -115,7 +115,7 @@ export async function GET() {
   // --- Que hay desplegado -------------------------------------------------
   let contenidoCarpeta: string[] | string;
   try {
-    contenidoCarpeta = fs.readdirSync(process.cwd()).slice(0, 40);
+    contenidoCarpeta = fs.readdirSync(/*turbopackIgnore: true*/ process.cwd()).slice(0, 40);
   } catch (err: any) {
     contenidoCarpeta = `no se puede listar: ${String(err?.message ?? err)}`;
   }

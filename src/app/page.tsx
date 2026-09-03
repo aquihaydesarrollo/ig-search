@@ -1,6 +1,6 @@
 import { query, queryOne, rutaBaseDatos } from '@/lib/db';
 import { getConfig } from '@/lib/config';
-import { ajuste, rutaAjustes } from '@/lib/ajustes';
+import { ajuste, rutasCandidatas, ajustesExisten } from '@/lib/ajustes';
 import { SECTORES } from '@/lib/osm';
 import TareaFila, { type Tarea } from '@/components/TareaFila';
 import AvisoConfiguracion from '@/components/AvisoConfiguracion';
@@ -89,7 +89,7 @@ export default async function Hoy() {
         <AvisoConfiguracion
           color="bg-coral"
           mensaje="Este panel es público"
-          detalle={`Cualquiera con la dirección puede ver tus leads.\n\nDefine PANEL_PASSWORD como variable de entorno (en Hostinger: Website Dashboard → Environment variables), o crea el fichero ${rutaAjustes()} con {"PANEL_PASSWORD": "tu-contraseña"}.`}
+          detalle={'Cualquiera con la dirección puede ver tus leads. Define PANEL_PASSWORD para pedir contraseña al entrar: mira abajo, en Dónde va cada cosa, las rutas exactas de este servidor.'}
         />
       )}
 
@@ -125,16 +125,51 @@ export default async function Hoy() {
         </section>
       )}
 
-      <section className="border-t border-hairline-soft pt-6 space-y-1">
-        <p className="caption break-all">Base de datos: {rutaBaseDatos()}</p>
-        {ultima && (
-          <p className="caption">
-            Último barrido: {ultima.iniciada_en} · {ultima.estado} · {ultima.negocios_nuevos} nuevos
-            · {ultima.webs_auditadas} webs auditadas
+      {/* Rutas reales de este servidor, para no tener que adivinarlas */}
+      <section className="bg-surface-soft rounded-lg p-6 sm:p-8 space-y-5">
+        <p className="eyebrow">Dónde va cada cosa</p>
+
+        <div>
+          <p className="text-body-sm font-medium mb-1">Base de datos</p>
+          <code className="text-body-sm font-mono break-all text-ink/70">{rutaBaseDatos()}</code>
+        </div>
+
+        <div>
+          <p className="text-body-sm font-medium mb-1">
+            Ajustes {ajustesExisten() ? '· fichero encontrado' : '· ningún fichero todavía'}
           </p>
-        )}
-        {ultima?.error && (
-          <p className="text-body-sm text-ink/60 mt-2">Avisos: {ultima.error}</p>
+          <p className="text-body-sm text-ink/60 mb-2">
+            Crea un <code className="font-mono">ajustes.json</code> en cualquiera de estas rutas.
+            Se usa la primera que exista:
+          </p>
+          <ol className="space-y-1">
+            {rutasCandidatas().map((r) => (
+              <li key={r} className="text-body-sm font-mono break-all text-ink/70">
+                <span className="text-ink/35 mr-2">—</span>{r}
+              </li>
+            ))}
+          </ol>
+          <pre className="mt-3 bg-canvas border border-hairline rounded-md p-4 text-body-sm
+                          font-mono overflow-x-auto">{`{
+  "PANEL_PASSWORD": "tu contraseña",
+  "RADAR_CRON_SECRET": "cadena aleatoria"
+}`}</pre>
+          <p className="text-body-sm text-ink/60 mt-3">
+            Alternativa: las mismas claves como variables de entorno. En Hostinger están en
+            Website Dashboard → Environment variables. Las variables mandan sobre el fichero.
+          </p>
+        </div>
+
+        {ultima && (
+          <div className="border-t border-hairline pt-4">
+            <p className="caption">
+              Último barrido: {ultima.iniciada_en} · {ultima.estado} · {ultima.negocios_nuevos} nuevos
+              · {ultima.webs_auditadas} webs auditadas
+            </p>
+            {ultima.error && (
+              <p className="text-body-sm text-ink/60 mt-2">Avisos: {ultima.error}</p>
+            )}
+          </div>
         )}
       </section>
     </div>

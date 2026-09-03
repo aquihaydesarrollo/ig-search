@@ -89,15 +89,24 @@ Requiere Node 20 o superior. No hace falta Python ni herramientas de compilació
 `next build` genera salida `standalone`.
 
 **No hace falta configurar nada para arrancar.** La base de datos se crea sola en
-`~/.ig-search/igsearch.db`, en la carpeta personal del usuario, que sobrevive a los
+`~/ig-search/igsearch.db`, en la carpeta personal del usuario, que sobrevive a los
 despliegues. El primer barrido se lanza con un botón del propio panel.
 
 ### Ajustes
 
-Cada ajuste se busca primero en las variables de entorno y, si no está, en el fichero
-`~/.ig-search/ajustes.json`. El fichero existe porque no todos los planes de alojamiento
-dejan definir variables de entorno, y además se puede editar con el administrador de
-archivos sin volver a desplegar.
+Cada ajuste se busca primero en las variables de entorno y, si no está, en un fichero
+`ajustes.json`. Se prueban varias rutas, en este orden, y se usa la primera que exista:
+
+1. La que indique `AJUSTES_FILE`
+2. `~/ig-search/ajustes.json` — carpeta personal, sobrevive a los despliegues
+3. `~/.ig-search/ajustes.json` — ubicación antigua
+4. `ajustes.json` junto a la aplicación — la más fácil de crear, pero se borra al desplegar
+
+Las claves de varios ficheros se combinan. El panel muestra estas rutas ya resueltas
+para este servidor, en la sección **Dónde va cada cosa**.
+
+La carpeta no empieza por punto a propósito: los administradores de archivos ocultan
+las que sí, y eso hace difícil encontrarlas.
 
 ```json
 {

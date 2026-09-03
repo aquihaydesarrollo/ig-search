@@ -34,7 +34,15 @@ declare global {
  */
 export function rutaBaseDatos(): string {
   if (process.env.DATABASE_FILE) return process.env.DATABASE_FILE;
-  return path.join(os.homedir(), '.ig-search', 'igsearch.db');
+
+  // Carpeta visible en los administradores de archivos, que suelen ocultar
+  // las que empiezan por punto.
+  const preferida = path.join(os.homedir(), 'ig-search', 'igsearch.db');
+  const antigua = path.join(os.homedir(), '.ig-search', 'igsearch.db');
+
+  // Si ya hay una base de datos en la ubicacion antigua, se sigue usando
+  try { if (fs.existsSync(antigua) && !fs.existsSync(preferida)) return antigua; } catch { /* ignorar */ }
+  return preferida;
 }
 
 export function baseDatosExiste(): boolean {

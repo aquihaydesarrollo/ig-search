@@ -33,17 +33,36 @@ declare global {
  *
  * DATABASE_FILE permite fijar otra ruta si hiciera falta.
  */
+/** Ruta de la conexion realmente abierta, una vez resuelta. */
+let rutaEnUso: string | null = null;
+
+export function rutasBaseDatos(): string[] {
+  if (process.env.DATABASE_FILE) return [process.env.DATABASE_FILE];
+
+  const rutas = [
+    // Carpeta visible, la preferida: los administradores de archivos ocultan
+    // las que empiezan por punto.
+    path.join(os.homedir(), 'ig-search', 'igsearch.db'),
+    // Ubicacion antigua, por si ya hay datos ahi
+    path.join(os.homedir(), '.ig-search', 'igsearch.db'),
+    // Ultimo recurso: junto a la aplicacion. Se pierde al desplegar, pero
+    // permite arrancar cuando las otras estan bloqueadas o sin permisos.
+    path.join(process.cwd(), 'data', 'igsearch.db'),
+  ];
+
+  // Si solo existe la antigua, se usa esa para no perder los datos
+  try {
+    if (!fs.existsSync(rutas[0]) && fs.existsSync(rutas[1])) {
+      return [rutas[1], rutas[0], rutas[2]];
+    }
+  } catch { /* ignorar */ }
+
+  return rutas;
+}
+
+/** Ruta en uso: la de la conexion abierta, o la primera candidata. */
 export function rutaBaseDatos(): string {
-  if (process.env.DATABASE_FILE) return process.env.DATABASE_FILE;
-
-  // Carpeta visible en los administradores de archivos, que suelen ocultar
-  // las que empiezan por punto.
-  const preferida = path.join(os.homedir(), 'ig-search', 'igsearch.db');
-  const antigua = path.join(os.homedir(), '.ig-search', 'igsearch.db');
-
-  // Si ya hay una base de datos en la ubicacion antigua, se sigue usando
-  try { if (fs.existsSync(antigua) && !fs.existsSync(preferida)) return antigua; } catch { /* ignorar */ }
-  return preferida;
+  return rutaEnUso ?? rutasBaseDatos()[0];
 }
 
 export function baseDatosExiste(): boolean {
@@ -83,24 +102,60 @@ function apartarBaseDatosRota(ruta: string): string | null {
   }
 }
 
+/** Borra los ficheros auxiliares que SQLite deja al lado de la base de datos. */
+function limpiarAuxiliares(ruta: string) {
+  for (const sufijo of ['-wal', '-shm', '-journal']) {
+    try { fs.rmSync(ruta + sufijo, { force: true }); } catch { /* ignorar */ }
+  }
+}
+
+/** Intenta abrir una ruta concreta, reparandola si hace falta. */
+function intentarRuta(ruta: string): Database | null {
+  try {
+    fs.mkdirSync(path.dirname(ruta), { recursive: true });
+  } catch {
+    return null; // sin permisos para crear la carpeta
+  }
+
+  try {
+    return abrir(ruta);
+  } catch {
+    // Un fichero vacio, corrupto o con un bloqueo olvidado dejaba la
+    // aplicacion entera fuera de servicio, con error 500 en todas las paginas.
+    limpiarAuxiliares(ruta);
+    try {
+      return abrir(ruta);
+    } catch {
+      // Sigue sin abrir: se aparta el fichero y se crea uno nuevo
+      apartarBaseDatosRota(ruta);
+      limpiarAuxiliares(ruta);
+      try {
+        return abrir(ruta);
+      } catch {
+        return null; // esta ruta no sirve, se probara la siguiente
+      }
+    }
+  }
+}
+
 export function getDb(): Database {
   if (!global._igSearchDb) {
-    const ruta = rutaBaseDatos();
-    fs.mkdirSync(path.dirname(ruta), { recursive: true });
+    const rutas = rutasBaseDatos();
+    const fallos: string[] = [];
 
-    try {
-      global._igSearchDb = abrir(ruta);
-    } catch (err) {
-      // Un fichero vacio o corrupto dejaba la aplicacion entera fuera de
-      // servicio: cada pagina devolvia un error 500 sin explicacion. Se aparta
-      // y se crea una base de datos nueva.
-      apartarBaseDatosRota(ruta);
-      // Los ficheros auxiliares de SQLite tambien pueden estar corruptos
-      for (const sufijo of ['-wal', '-shm', '-journal']) {
-        try { fs.rmSync(ruta + sufijo, { force: true }); } catch { /* ignorar */ }
+    for (const ruta of rutas) {
+      const db = intentarRuta(ruta);
+      if (db) {
+        global._igSearchDb = db;
+        rutaEnUso = ruta;
+        return db;
       }
-      global._igSearchDb = abrir(ruta);
+      fallos.push(ruta);
     }
+
+    throw new Error(
+      `No se pudo abrir ninguna base de datos. Rutas probadas: ${fallos.join(', ')}`,
+    );
   }
   return global._igSearchDb;
 }

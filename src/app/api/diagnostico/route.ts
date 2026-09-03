@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import fs from 'node:fs';
 import path from 'node:path';
 import { rutasCandidatas } from '@/lib/ajustes';
-import { rutaBaseDatos, getDb } from '@/lib/db';
+import { rutaBaseDatos, rutasBaseDatos, getDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,7 +103,7 @@ export async function GET() {
     const tablas = (db.all(
       "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
     ) as Array<{ name: string }>).map((t) => t.name);
-    baseDatosPrueba = { ok: true, negocios: fila?.n ?? 0, tablas };
+    baseDatosPrueba = { ok: true, enUso: rutaBaseDatos(), negocios: fila?.n ?? 0, tablas };
   } catch (err: any) {
     baseDatosPrueba = {
       ok: false,
@@ -130,7 +130,27 @@ export async function GET() {
       : 'No hay contraseña definida: el panel está abierto.',
     origenDeCadaAjuste: origen,
     ficherosDeAjustes: ficheros,
-    baseDatos: { ruta: rutaBaseDatos(), existe: fs.existsSync(rutaBaseDatos()) },
+    baseDatos: {
+      enUso: rutaBaseDatos(),
+      candidatas: rutasBaseDatos().map((ruta) => {
+        const info: Record<string, unknown> = { ruta };
+        try {
+          info.existe = fs.existsSync(ruta);
+          if (info.existe) info.bytes = fs.statSync(ruta).size;
+          for (const sufijo of ['-journal', '-wal', '-shm']) {
+            if (fs.existsSync(ruta + sufijo)) info['tiene' + sufijo] = true;
+          }
+          if (fs.existsSync(ruta + '.roto')) info.hayCopiaRota = true;
+          try {
+            fs.accessSync(path.dirname(ruta), fs.constants.W_OK);
+            info.carpetaEscribible = true;
+          } catch { info.carpetaEscribible = false; }
+        } catch (err: any) {
+          info.error = String(err?.message ?? err);
+        }
+        return info;
+      }),
+    },
     carpetaDeTrabajo: process.cwd(),
   }, {
     headers: { 'Cache-Control': 'no-store' },

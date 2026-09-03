@@ -22,14 +22,12 @@ export function proxy(req: NextRequest) {
 
   const cabecera = req.headers.get('authorization') ?? '';
   if (cabecera.startsWith('Basic ')) {
-    try {
-      const descifrado = atob(cabecera.slice(6));
+    const descifrado = descifrarBasic(cabecera.slice(6));
+    if (descifrado !== null) {
       const separador = descifrado.indexOf(':');
       if (separador !== -1 && iguales(descifrado.slice(separador + 1), password)) {
         return NextResponse.next();
       }
-    } catch {
-      // cabecera mal formada: se pide de nuevo
     }
   }
 
@@ -39,11 +37,31 @@ export function proxy(req: NextRequest) {
   });
 }
 
+/**
+ * Descifra la cabecera Basic respetando los acentos.
+ *
+ * atob() devuelve un byte por caracter, asi que una contrasena con ñ o tilde
+ * llegaba partida en dos caracteres y nunca coincidia. Hay que reconstruir
+ * los bytes y decodificarlos como UTF-8.
+ */
+function descifrarBasic(base64: string): string | null {
+  try {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
 /** Comparacion en tiempo constante para no filtrar la contrasena. */
 function iguales(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
+  // Se comparan los bytes UTF-8: dos textos distintos pueden representar el
+  // mismo caracter acentuado de formas diferentes segun el teclado usado.
+  const ba = new TextEncoder().encode(a.normalize('NFC'));
+  const bb = new TextEncoder().encode(b.normalize('NFC'));
+  if (ba.length !== bb.length) return false;
   let diferencia = 0;
-  for (let i = 0; i < a.length; i++) diferencia |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < ba.length; i++) diferencia |= ba[i] ^ bb[i];
   return diferencia === 0;
 }
 

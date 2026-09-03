@@ -38,7 +38,9 @@ Sin el token de Meta el radar funciona igual, pero se queda sin ningún dato de 
 |---|---|
 | **Radar de leads** | Descubre negocios en OpenStreetMap, audita su web y localiza su Instagram. Los puntúa por oportunidad comercial. |
 | **Tareas de hoy** | Lista diaria de a quién comentar, seguir o revisar, con el motivo y enlace directo. |
+| **Análisis** | Informe de cualquier cuenta profesional pública: engagement real, ritmo, qué formato le funciona, mejores días y horas, publicaciones virales y cómo escribe. |
 | **Competencia** | Ritmo, engagement y mejores publicaciones de las agencias rivales. |
+| **Ajustes** | Conexión guiada de Instagram y contraseña del panel, sin tocar ficheros. |
 | **Métricas** | Evolución de la cuenta propia cruzada con las acciones realizadas. |
 
 ### Qué detecta la auditoría de web

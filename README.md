@@ -105,6 +105,13 @@ Cada ajuste se busca primero en las variables de entorno y, si no está, en un f
 Las claves de varios ficheros se combinan. El panel muestra estas rutas ya resueltas
 para este servidor, en la sección **Dónde va cada cosa**.
 
+### Diagnóstico
+
+Si la contraseña no deja entrar, `GET /api/diagnostico` responde **sin pedir contraseña**
+y dice de dónde sale cada ajuste: qué ficheros existen, cuáles definen cada clave, si el
+JSON es válido y si una variable de entorno está pisando al fichero. Nunca devuelve
+valores, solo procedencias.
+
 La carpeta no empieza por punto a propósito: los administradores de archivos ocultan
 las que sí, y eso hace difícil encontrarlas.
 

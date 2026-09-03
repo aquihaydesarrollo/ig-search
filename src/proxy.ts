@@ -11,6 +11,10 @@ import { ajuste } from '@/lib/ajustes';
  * x-radar-secret, asi que esa ruta se deja pasar cuando el secreto coincide.
  */
 export function proxy(req: NextRequest) {
+  // El diagnostico queda siempre abierto: sirve para cuando la contrasena
+  // no deja entrar. No devuelve ningun valor, solo de donde sale cada ajuste.
+  if (req.nextUrl.pathname === '/api/diagnostico') return NextResponse.next();
+
   const password = ajuste('PANEL_PASSWORD');
   if (!password) return NextResponse.next();
 

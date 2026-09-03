@@ -2,11 +2,12 @@
 
 import { useState, useTransition } from 'react';
 
-const ETIQUETAS: Record<string, { texto: string; color: string }> = {
-  comentar: { texto: 'Comentar', color: 'bg-brand/20 text-brand border-brand/40' },
-  seguir: { texto: 'Seguir', color: 'bg-ok/20 text-ok border-ok/40' },
-  like: { texto: 'Like', color: 'bg-sky-500/20 text-sky-300 border-sky-500/40' },
-  revisar: { texto: 'Revisar', color: 'bg-warn/20 text-warn border-warn/40' },
+/** Cada tipo de accion vive en su propio bloque de color pastel. */
+const ETIQUETAS: Record<string, { texto: string; fondo: string }> = {
+  comentar: { texto: 'Comentar', fondo: 'bg-lilac' },
+  seguir:   { texto: 'Seguir',   fondo: 'bg-lime' },
+  like:     { texto: 'Like',     fondo: 'bg-mint' },
+  revisar:  { texto: 'Revisar',  fondo: 'bg-coral' },
 };
 
 export interface Tarea {
@@ -16,12 +17,17 @@ export interface Tarea {
   enlace: string | null;
   contexto: string | null;
   hecha: boolean;
+  nombre?: string | null;
+  sector?: string | null;
+  telefono?: string | null;
+  motivos?: string[];
 }
 
 export default function TareaFila({ tarea }: { tarea: Tarea }) {
   const [hecha, setHecha] = useState(tarea.hecha);
   const [pendiente, startTransition] = useTransition();
-  const etiqueta = ETIQUETAS[tarea.tipo] ?? { texto: tarea.tipo, color: 'bg-line text-muted border-line' };
+  const etiqueta = ETIQUETAS[tarea.tipo] ?? { texto: tarea.tipo, fondo: 'bg-surface-soft' };
+  const motivos = tarea.motivos ?? [];
 
   function alternar() {
     const nuevo = !hecha;
@@ -36,32 +42,69 @@ export default function TareaFila({ tarea }: { tarea: Tarea }) {
   }
 
   return (
-    <div className={`tarjeta flex gap-4 items-start ${hecha ? 'opacity-45' : ''}`}>
-      <input
-        type="checkbox"
-        checked={hecha}
-        onChange={alternar}
+    <div
+      className={`border-b border-hairline last:border-0 py-6 flex gap-4 sm:gap-5 items-start
+                  ${hecha ? 'opacity-40' : ''}`}
+    >
+      <button
+        onClick={alternar}
         disabled={pendiente}
-        className="mt-1 h-5 w-5 accent-brand cursor-pointer shrink-0"
-        aria-label="Marcar como hecha"
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-xs px-2 py-0.5 rounded border ${etiqueta.color}`}>{etiqueta.texto}</span>
-          {tarea.handle && <span className="text-sm font-medium">@{tarea.handle}</span>}
-        </div>
-        {tarea.contexto && (
-          <p className="text-sm text-muted mt-1.5 leading-relaxed">{tarea.contexto}</p>
+        aria-label={hecha ? 'Marcar como pendiente' : 'Marcar como hecha'}
+        className={`mt-1 h-6 w-6 shrink-0 rounded-full border transition-colors
+                    ${hecha ? 'bg-ink border-ink text-canvas' : 'border-hairline hover:border-ink'}`}
+      >
+        {hecha && (
+          <svg viewBox="0 0 20 20" fill="none" className="h-full w-full p-1">
+            <path d="M4 10.5 8 14.5 16 6" stroke="currentColor" strokeWidth="2.4"
+                  strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         )}
+      </button>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-3 flex-wrap">
+          <span className={`tag ${etiqueta.fondo}`}>{etiqueta.texto}</span>
+          <h3 className="text-card-title font-bold">{tarea.nombre ?? tarea.handle ?? 'Sin nombre'}</h3>
+          {tarea.sector && <span className="caption">{tarea.sector}</span>}
+        </div>
+
+        {motivos.length > 0 ? (
+          <ul className="mt-3 space-y-1">
+            {motivos.map((m, i) => (
+              <li key={i} className="text-body-sm text-ink/70 flex gap-2">
+                <span className="text-ink/30">—</span>
+                <span>{m}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          tarea.contexto && <p className="text-body-sm text-ink/70 mt-3">{tarea.contexto}</p>
+        )}
+
+        <div className="flex gap-2 mt-4 flex-wrap">
+          {tarea.handle && (
+            <a href={`https://instagram.com/${tarea.handle}`} target="_blank" rel="noopener noreferrer"
+               className="tag bg-lilac hover:bg-lilac/70">@{tarea.handle}</a>
+          )}
+          {tarea.telefono && (
+            <a href={`tel:${tarea.telefono}`} className="tag bg-mint hover:bg-mint/70">{tarea.telefono}</a>
+          )}
+          {!tarea.handle && (
+            <span className="tag bg-surface-soft">Sin Instagram · búscalo o llama</span>
+          )}
+          {tarea.enlace && (
+            <a href={tarea.enlace} target="_blank" rel="noopener noreferrer"
+               className="tag border border-hairline hover:bg-surface-soft sm:hidden">
+              Abrir
+            </a>
+          )}
+        </div>
       </div>
+
       {tarea.enlace && (
-        <a
-          href={tarea.enlace}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="boton bg-line hover:bg-brand hover:text-white shrink-0"
-        >
-          Abrir →
+        <a href={tarea.enlace} target="_blank" rel="noopener noreferrer"
+           className="pill-secondary shrink-0 hidden sm:inline-flex">
+          Abrir
         </a>
       )}
     </div>

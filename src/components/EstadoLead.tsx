@@ -24,8 +24,10 @@ export default function EstadoLead({ negocioId, estadoActual }: { negocioId: str
       value={estado}
       onChange={(e) => cambiar(e.target.value)}
       disabled={pendiente}
-      className="bg-ink border border-line rounded-lg text-xs px-2 py-1.5 shrink-0 cursor-pointer"
       aria-label="Estado del lead"
+      className="shrink-0 cursor-pointer rounded-pill border border-hairline bg-canvas
+                 px-3.5 py-1.5 font-mono text-caption uppercase tracking-[0.6px]
+                 hover:bg-surface-soft"
     >
       {ESTADOS.map((e) => (
         <option key={e} value={e}>{e.replace('_', ' ')}</option>

@@ -2,16 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
+:root { color-scheme: light; }
 
-body {
-  background: #0f1115;
-  color: #e8ebf2;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+html, body {
+  background: theme('colors.canvas');
+  color: theme('colors.ink');
+  font-family: theme('fontFamily.sans');
+  font-feature-settings: 'kern';
+  -webkit-font-smoothing: antialiased;
 }
 
 @layer components {
-  .tarjeta { @apply bg-panel border border-line rounded-xl p-4; }
-  .etiqueta { @apply text-xs text-muted uppercase tracking-wide; }
-  .boton { @apply px-3 py-1.5 rounded-lg text-sm font-medium transition-colors; }
+  /* --- Tipografia ------------------------------------------------- */
+  .eyebrow {
+    @apply font-mono text-eyebrow uppercase tracking-[0.54px] text-ink/55;
+  }
+  .caption {
+    @apply font-mono text-caption uppercase tracking-[0.6px] text-ink/50;
+  }
+
+  /* --- Botones: la pildora es la unica forma ----------------------- */
+  .pill {
+    @apply inline-flex items-center justify-center rounded-pill
+           text-body-sm font-medium transition-colors px-5 py-2.5;
+  }
+  .pill-primary {
+    @apply pill bg-ink text-canvas hover:bg-ink/85 disabled:opacity-40;
+  }
+  .pill-secondary {
+    @apply pill bg-canvas text-ink border border-hairline hover:bg-surface-soft;
+  }
+  .pill-sm {
+    @apply inline-flex items-center justify-center rounded-pill
+           text-body-sm font-medium transition-colors px-3.5 py-1.5;
+  }
+
+  /* --- Superficies ------------------------------------------------- */
+  .card {
+    @apply bg-canvas border border-hairline rounded-lg p-6;
+  }
+  .tile {
+    @apply bg-surface-soft rounded-md p-4;
+  }
+  .block {
+    @apply rounded-lg p-8;
+  }
+
+  /* --- Etiquetas de categoria -------------------------------------- */
+  .tag {
+    @apply font-mono text-caption uppercase tracking-[0.6px]
+           rounded-pill px-3 py-1 text-ink;
+  }
 }

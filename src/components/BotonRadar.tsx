@@ -17,16 +17,12 @@ export default function BotonRadar({ texto = 'Ejecutar barrido ahora' }: { texto
   }
 
   return (
-    <div className="space-y-2">
-      <button
-        onClick={lanzar}
-        disabled={pendiente}
-        className="boton bg-brand text-white hover:opacity-90 disabled:opacity-50"
-      >
+    <div className="space-y-3">
+      <button onClick={lanzar} disabled={pendiente} className="pill-primary">
         {pendiente ? 'Lanzando…' : texto}
       </button>
       {mensaje && (
-        <p className={`text-sm ${error ? 'text-warn' : 'text-ok'}`}>{mensaje}</p>
+        <p className={`text-body-sm ${error ? 'text-ink/70' : 'text-success'}`}>{mensaje}</p>
       )}
     </div>
   );

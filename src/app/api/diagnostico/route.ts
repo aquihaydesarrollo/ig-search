@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import fs from 'node:fs';
+import path from 'node:path';
 import { rutasCandidatas } from '@/lib/ajustes';
-import { rutaBaseDatos } from '@/lib/db';
+import { rutaBaseDatos, getDb } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,8 +77,54 @@ export async function GET() {
 
   const passwordDefinida = origen.PANEL_PASSWORD !== 'sin definir';
 
+  // --- Ficheros que la aplicacion lee en tiempo de ejecucion --------------
+  // Next no los detecta al empaquetar porque la ruta se compone con cwd,
+  // asi que pueden faltar en el despliegue.
+  const recursos: Record<string, unknown> = {};
+  for (const relativa of ['config/radar.json', 'db/schema.sql']) {
+    const ruta = path.join(process.cwd(), relativa);
+    try {
+      if (!fs.existsSync(ruta)) { recursos[relativa] = 'NO EXISTE'; continue; }
+      const bruto = fs.readFileSync(ruta, 'utf8');
+      recursos[relativa] = relativa.endsWith('.json')
+        ? (() => { try { JSON.parse(bruto); return `ok, ${bruto.length} bytes`; }
+                   catch (e: any) { return `JSON invalido: ${e?.message}`; } })()
+        : `ok, ${bruto.length} bytes`;
+    } catch (err: any) {
+      recursos[relativa] = `no se puede leer: ${String(err?.message ?? err)}`;
+    }
+  }
+
+  // --- Prueba real de la base de datos ------------------------------------
+  let baseDatosPrueba: Record<string, unknown>;
+  try {
+    const db = getDb();
+    const fila = db.get('SELECT count(*) AS n FROM negocios') as { n: number } | undefined;
+    const tablas = (db.all(
+      "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+    ) as Array<{ name: string }>).map((t) => t.name);
+    baseDatosPrueba = { ok: true, negocios: fila?.n ?? 0, tablas };
+  } catch (err: any) {
+    baseDatosPrueba = {
+      ok: false,
+      error: String(err?.message ?? err),
+      tipo: err?.constructor?.name,
+    };
+  }
+
+  // --- Que hay desplegado -------------------------------------------------
+  let contenidoCarpeta: string[] | string;
+  try {
+    contenidoCarpeta = fs.readdirSync(process.cwd()).slice(0, 40);
+  } catch (err: any) {
+    contenidoCarpeta = `no se puede listar: ${String(err?.message ?? err)}`;
+  }
+
   return NextResponse.json({
     passwordDefinida,
+    baseDatosPrueba,
+    recursosEnDisco: recursos,
+    contenidoCarpeta,
     resumen: passwordDefinida
       ? `El panel pide contraseña y la toma de: ${origen.PANEL_PASSWORD}`
       : 'No hay contraseña definida: el panel está abierto.',

@@ -4,6 +4,7 @@ import os from 'node:os';
 // El paquete es CommonJS: la importacion por defecto funciona tanto en
 // el empaquetado de Next como al ejecutar los scripts con node a secas.
 import sqlite3 from 'node-sqlite3-wasm';
+import { ESQUEMA_SQL } from './esquema.ts';
 
 const { Database } = sqlite3;
 type Database = InstanceType<typeof Database>;
@@ -50,20 +51,56 @@ export function baseDatosExiste(): boolean {
   return fs.existsSync(/*turbopackIgnore: true*/ rutaBaseDatos());
 }
 
+function abrir(ruta: string): Database {
+  const db = new Database(ruta);
+  db.run('PRAGMA foreign_keys = ON');
+  db.run('PRAGMA busy_timeout = 5000');
+  // La aplicacion se crea su propia base de datos la primera vez, sin
+  // necesidad de consola en el servidor. CREATE TABLE IF NOT EXISTS, asi que
+  // ejecutarlo en cada arranque no altera los datos existentes.
+  db.exec(ESQUEMA_SQL);
+  return db;
+}
+
+/**
+ * Aparta un fichero de base de datos ilegible para poder empezar de cero.
+ * Si tiene contenido se conserva con otro nombre en lugar de borrarlo: podria
+ * contener datos recuperables. Si esta vacio no hay nada que guardar.
+ */
+function apartarBaseDatosRota(ruta: string): string | null {
+  try {
+    const tam = fs.statSync(ruta).size;
+    if (tam === 0) {
+      fs.unlinkSync(ruta);
+      return null;
+    }
+    const destino = `${ruta}.roto`;
+    try { fs.rmSync(destino, { force: true }); } catch { /* ignorar */ }
+    fs.renameSync(ruta, destino);
+    return destino;
+  } catch {
+    return null;
+  }
+}
+
 export function getDb(): Database {
   if (!global._igSearchDb) {
     const ruta = rutaBaseDatos();
     fs.mkdirSync(path.dirname(ruta), { recursive: true });
-    const db = new Database(ruta);
-    db.run('PRAGMA foreign_keys = ON');
-    db.run('PRAGMA busy_timeout = 5000');
-    global._igSearchDb = db;
 
-    // La aplicacion se crea su propia base de datos la primera vez.
-    // Asi no hace falta acceso por consola al servidor, que en muchos
-    // alojamientos compartidos no existe.
-    const sql = fs.readFileSync(path.join(process.cwd(), 'db', 'schema.sql'), 'utf8');
-    db.exec(sql);
+    try {
+      global._igSearchDb = abrir(ruta);
+    } catch (err) {
+      // Un fichero vacio o corrupto dejaba la aplicacion entera fuera de
+      // servicio: cada pagina devolvia un error 500 sin explicacion. Se aparta
+      // y se crea una base de datos nueva.
+      apartarBaseDatosRota(ruta);
+      // Los ficheros auxiliares de SQLite tambien pueden estar corruptos
+      for (const sufijo of ['-wal', '-shm', '-journal']) {
+        try { fs.rmSync(ruta + sufijo, { force: true }); } catch { /* ignorar */ }
+      }
+      global._igSearchDb = abrir(ruta);
+    }
   }
   return global._igSearchDb;
 }
